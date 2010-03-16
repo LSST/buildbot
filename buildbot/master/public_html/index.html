@@ -1,0 +1,167 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-15">
+<title>LSST Automated Build - Buildbot</title>
+<style type="text/css">
+<!--
+body { font-family: sans-serif; font-size: 90% }
+td { font-family: sans-serif; font-size: 90%; margin: 0px; padding: 2px; border-left: 1px solid #aaa; border-top: 1px solid #aaa }
+th { font-family: sans-serif; font-size: 90%; margin: 0px; padding: 2px; border-left: 1px solid #aaa; border-top: 1px solid #aaa; background: #eee }
+dt { font-weight: bold; margin-top:0.25em }
+table { border-right: 1px solid #aaa; border-bottom: 1px solid #aaa }
+#succeed { background:#6f6 }
+#fail { background:#f33 }
+-->
+</style>
+</head>
+
+<body>
+
+<div style="text-align:center;float:right;color:#999">
+<!--  <a href="waterfall"><img src="waterfall-all-green.png" title="Screenshot of waterfall display" style="border:1px solid #aaa;height:563px;width:524px;margin:2px;padding:2px"></a><br> -->
+  <a href="waterfall"><img src="waterfall-all-green.png" title="Screenshot of waterfall display" style="border:1px solid #aaa;height:375px;width:349px;margin:2px;padding:2px"></a><br>
+</div>
+
+<a href="http://dev.lsstcorp.org/"><img style="border:none" src="http://dev.lsstcorp.org/trac/chrome/site/LSSTlogo.png" alt="LSST Logo" style="border:none" /></a>
+
+<!--
+<p style="text-align:center;float:right;color:#999">
+  <a href="waterfall"><img src="waterfall-top.png" title="Screenshot of waterfall display" style="border:2px dotted #ccc;height:189px;width:524px"></a><br>
+  o<br>
+  o<br>
+  o<br>
+  <a href="waterfall"><img src="waterfall-lower.png" title="Continued screenshot of waterfall display" style="border:2px dotted #ccc;height:168px;width:527px"></a>
+</p>
+-->
+
+<h1>Automated Builds</h1>
+
+<ul>
+  <li><a href="waterfall">Waterfall display</a> - timeline of recent activity</li>
+  <li><a href="one_box_per_builder">Latest builds</a> - status of each build target</li>
+  <li><a href="one_line_per_build">Recent build results</a> - summary of recent activity</li>
+  <li><a href="buildslaves">Workers</a> - list of slave machines</li>
+  <li><a href="changes">Version control monitoring</a></li>
+
+  <br />
+  <li><a href="about">About this Buildbot</a></li>
+</ul>
+
+<h2>What does it mean?</h2>
+
+<p>
+  The <a href="waterfall">Waterfall display</a> (screenshot at right) is a timeline of build activity.  In general, <span
+  style="background:#6f6">&nbsp;green&nbsp;</span> indicates success, and <span style="background:#f33">&nbsp;red&nbsp;</span> failure.
+  The column headers indicate whether each column's <i>latest</i> build succeeded or failed.  For example, in the screenshot at the
+  right, the first four columns' most recent tasks have succeeded, and the last two columns' have failed.
+</p>
+<p>
+  The waterfall's current columns, from left to right (last updated 2/23/2009):
+</p>
+
+<table cellspacing=0>
+  <tr>
+    <th style="border:none;background:#fff"></th>
+    <th>name</th>
+    <th>OS</th>
+    <th>arch</th>
+    <th>command</th>
+    <th>description</th>
+    <th>dependencies</th>
+    <th>schedule</th>
+<!--    <th>purpose</th> -->
+  </tr>
+  <tr>
+    <th>1.</th>
+    <td rowspan="3">Triggered Trunk</td>
+    <td rowspan="10">CentOS</td>
+    <td>64-bit</td>
+    <td rowspan="6"><tt>scons opt=3 install declare</tt></td>
+    <td rowspan="6">Test each <b>trunk</b> package against its dependencies</td>
+    <td rowspan="2">minimal</td>
+    <td rowspan="3">After every check-in to a package's trunk (plus an 11-minute <a href="http://buildbot.net/repos/release/docs/buildbot.html#Scheduler-Scheduler">settling time</a>)</td>
+<!--    <td rowspan="3">Monitor the status of the trunk daily.</td> -->
+  </tr>
+  <tr>
+    <th>2.</th>
+    <td>32-bit</td>
+  </tr>
+  <tr>
+    <th>3.</th>
+    <td>64-bit</td>
+    <td>current</td>
+  </tr>
+  <tr>
+    <th>4.</th>
+    <td rowspan="3">Nightly Trunk</td>
+    <td>64-bit</td>
+    <td rowspan="2">minimal</td>
+    <td rowspan="3">Nightly, 3 am (Central Time)</td>
+<!--    <td rowspan="3">Test checkins to the trunk continuously.</td> -->
+  </tr>
+  <tr>
+    <th>5.</th>
+    <td>32-bit</td>
+  </tr>
+  <tr>
+    <th>6.</th>
+    <td>64-bit</td>
+    <td>current</td>
+  </tr>
+  <tr>
+    <th>7.</th>
+    <td rowspan="2">Nightly Release Pipeline</td>
+    <td>64-bit</td>
+    <td rowspan="4"><tt>newinstall.sh<br><br>lsstpkg install LSSTPipe</tt></td>
+    <td rowspan="2" colspan="2"><b>Release</b> packages, installed from scratch</td>
+    <td rowspan="2">Nightly, 12:30 am (Central Time)</td>
+<!--    <td rowspan="2">Test full installation of LSST tools, from scratch.</td> -->
+  </tr>
+  <tr>
+    <th>8.</th>
+    <td>32-bit</td>
+  </tr>
+  <tr>
+    <th>9.</th>
+    <td rowspan="2">Incremental Release Pipeline</td>
+    <td>64-bit</td>
+    <td rowspan="2" colspan="2">Update release packages installed by 7. and 8. (without starting from scratch)</td>
+    <td rowspan="2">On demand (not scheduled)</td>
+<!--    <td rowspan="2">Test a fix if the from-scratch install failed, or try installing new package releases.</td> -->
+  </tr>
+  <tr>
+    <th>10.</th>
+    <td>32-bit</td>
+  </tr>
+</table>
+
+<h2>Terms</h2>
+
+<dl>
+  <di>
+    <dt>OS</dt>
+    <dd>Currently the nightly build only runs CentOS, although we will add Mac OS, since it is a supported platform.</dd>
+  </di>
+  <di>
+    <dt>arch</dt>
+    <dd>LSST supports both 64- and 32-bit architectures.  As long as developers use 32-bit machines (netbooks, for example) we will probably continue to test the build on them.</dd>
+  </di>
+  <di>
+    <dt>dependencies</dt>
+    <dd>We test trunk packages against both their "minimal" and "current" dependencies, to cover a reasonable compatibility range.  Testing against every version in between would be prohibitive.
+      <dl>
+        <di>
+          <dt>minimal</dt>
+          <dd>Build against the minimum versions that a package declares in its <tt>ups/&lt;package_name&gt;.table</tt> file.  For example, if a package lists <tt>setupRequired(daf_base >= 3.2.1)</tt>, then we'll build it against daf_base version 3.2.1, even if the "current" version is newer.</dd>
+        </di>
+        <di>
+          <dt>current</dt>
+          <dd>Simple enough: use the current versions of a package's dependencies, as listed in <a href="http://dev.lsstcorp.org/dmspkgs/current.list">current.list</a>.</dd>
+        </di>
+      </dl>
+    </dd>
+  </di>
+</dl>
+
+</body> </html>
