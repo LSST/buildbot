@@ -334,7 +334,7 @@ lookup_svn_revision() {
 
 # update TRUNK_PACKAGE_COUNT to match the number of packages whose version matches svn#### or "trunk"
 count_trunk_packages() {
-    TRUNK_PACKAGE_COUNT=`eups list | grep -P "svn|trunk" | grep -v LOCAL | wc -l`
+    TRUNK_PACKAGE_COUNT=`eups list | grep -P "svn|trunk" | grep -v LOCAL | grep -v afwdata | wc -l`
 #    let TRUNK_PACKAGE_COUNT=TRUNK_PACKAGE_COUNT+`eups list | grep trunk | grep -v LOCAL | wc -l`
 }
 
