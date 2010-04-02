@@ -341,7 +341,7 @@ count_trunk_packages() {
 # attempt eups remove on each package whose version matches svn#### or equals "trunk"
 remove_trunk_packages() {
     local word
-    for word in `eups list | grep -P "svn|trunk"`; do
+    for word in `eups list | grep -P "svn|trunk" | grep -v afwdata`; do
 	if [ "${word:0:3}" = "svn" -o "$word" = "trunk" ]; then
 	    local version=$word
 	    local is_setup=`eups list ctrl_events $version | grep -i setup`
