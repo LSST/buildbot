@@ -332,16 +332,21 @@ lookup_svn_revision() {
     fi
 }
 
+KEEP_TRUNK="| grep -v afwdata | grep -v astrometry_net_data"
+
 # update TRUNK_PACKAGE_COUNT to match the number of packages whose version matches svn#### or "trunk"
 count_trunk_packages() {
-    TRUNK_PACKAGE_COUNT=`eups list | grep -P "svn|trunk" | grep -v LOCAL | grep -v afwdata | wc -l`
+    local count_cmd="eups list | grep -P \"svn|trunk\" | grep -v LOCAL $KEEP_TRUNK | wc -l"
+#    print $count_cmd
+    TRUNK_PACKAGE_COUNT=`eval $count_cmd`
 #    let TRUNK_PACKAGE_COUNT=TRUNK_PACKAGE_COUNT+`eups list | grep trunk | grep -v LOCAL | wc -l`
 }
 
 # attempt eups remove on each package whose version matches svn#### or equals "trunk"
 remove_trunk_packages() {
+    local enumerate_cmd="eups list | grep -P \"svn|trunk\" $KEEP_TRUNK"
     local word
-    for word in `eups list | grep -P "svn|trunk" | grep -v afwdata`; do
+    for word in `eval $enumerate_cmd`; do
 	if [ "${word:0:3}" = "svn" -o "$word" = "trunk" ]; then
 	    local version=$word
 	    local is_setup=`eups list ctrl_events $version | grep -i setup`
