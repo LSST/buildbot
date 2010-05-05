@@ -77,7 +77,7 @@ fi
 # only copy docs if this machine has a /var/www/html/doxygen
 step "Copy doxygen docs to www:"
 if [ -d $WEB_ROOT ]; then
-    for DOC_DIR in `find . -name doxygen | grep "doc\/doxygen"`; do
+    for DOC_DIR in `find . -wholename \*doc/doxygen -o -wholename \*doc/htmlDir`; do
 	OLD_IFS=$IFS
 	IFS="/" # now bash will split on / instead of white space
 	I=0
