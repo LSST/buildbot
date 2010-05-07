@@ -351,8 +351,8 @@ remove_trunk_packages() {
 	    local version=$word
 	    local is_setup=`eups list ctrl_events $version | grep -i setup`
 	    if [ $is_setup ]; then unsetup $package; fi
-	    #pretty_execute "eups remove --force $package $version"
-	    verbose_execute "eups undeclare --force $package $version"
+	    verbose_execute "eups remove --force $package $version"
+	    #verbose_execute "eups undeclare --force $package $version"
 	else
 	    local package=$word
 	fi
