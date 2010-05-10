@@ -385,8 +385,8 @@ step "Install $PACKAGE $VERSION"
 pushd $SVN_LOCAL_DIR > /dev/null
 #pretty_execute "eups list -s | grep scons # BEFORE setup"
 #pretty_execute "eups list -s # BEFORE setup"
-#pretty_execute "setup -r ."
-pretty_execute "setup -r . --exact"
+pretty_execute "setup -r ."
+#pretty_execute "setup -r . --exact"
 #pretty_execute "eups list -s | grep scons # AFTER setup"
 #pretty_execute "eups list -s # AFTER setup"
 pretty_execute "eups list $PACKAGE"
@@ -395,6 +395,14 @@ if [ $RETVAL != 0 ]; then
     exit 1
 fi
 popd > /dev/null
+
+print "after setting up local package, dependencies are now:"
+I=0
+echo
+while [ $I -lt $NUM_DEPS ]; do
+    print "${DEPENDENCIES[$I]} `eups list -s ${DEPENDENCIES[$I]}`"
+    let "I += 1"
+done
 
 # prepare for stuff in self directory
 pushd $SVN_LOCAL_DIR > /dev/null
