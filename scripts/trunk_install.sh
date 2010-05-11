@@ -396,14 +396,6 @@ if [ $RETVAL != 0 ]; then
 fi
 popd > /dev/null
 
-print "after setting up local package, dependencies are now:"
-I=0
-echo
-while [ $I -lt $NUM_DEPS ]; do
-    print "${DEPENDENCIES[$I]} `eups list -s ${DEPENDENCIES[$I]}`"
-    let "I += 1"
-done
-
 # prepare for stuff in self directory
 pushd $SVN_LOCAL_DIR > /dev/null
 
