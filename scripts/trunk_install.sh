@@ -412,19 +412,32 @@ if [ $SCONS_EXIT != 0 ]; then
     print "Install/test failed: $PACKAGE $VERSION"
     FAILED_INSTALL=true
 fi
-pretty_execute "eups declare -r . $PACKAGE $VERSION"
-# if no current version of self, declare self current
-pretty_execute "eups list -c $PACKAGE | grep Current"
-if [ ! "`eups list -c $PACKAGE | grep Current`" ]; then
-    print "No version of $PACKAGE is declared current; declaring $VERSION current."
-    pretty_execute eups declare -c $PACKAGE $VERSION
-fi
+
+# Why would we want to eups declare this package?  I don't see a reason.
+# setup -r . && scons should be enough.
+#
+# pretty_execute "eups declare -r . $PACKAGE $VERSION"
+# # if no current version of self, declare self current
+# pretty_execute "eups list -c $PACKAGE | grep Current"
+# if [ ! "`eups list -c $PACKAGE | grep Current`" ]; then
+#     print "No version of $PACKAGE is declared current; declaring $VERSION current."
+#     pretty_execute eups declare -c $PACKAGE $VERSION
+# fi
 
 # preserve logs
+LOG_FILE="config.log"
+pretty_execute pwd
 if [ "$LOG_DEST" -a "(" "$FAILED_INSTALL" -o "$LOG_SUCCESS" ")" ]; then
-    LOG_FILE="config.log"
     if [ -f "$LOG_FILE" ]; then
 	copy_log ${PACKAGE}_$VERSION/$LOG_FILE $LOG_FILE $LOG_DEST_HOST $LOG_DEST_DIR $PACKAGE/$VERSION $LOG_URL
+    else
+	print "No $LOG_FILE present."
+    fi
+else
+    if [ -f "$LOG_FILE" ]; then
+	print "Not preserving config.log."
+    else
+	print "No config.log generated."
     fi
 fi
 
