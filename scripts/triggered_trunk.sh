@@ -98,7 +98,6 @@ while [ $1 ]; do
 #	print "$SVN_LOCAL_DIR doesn't exist; checking out from $SVN_URL"
 #	SVN_CMD="svn checkout $SVN_URL $SVN_LOCAL_DIR 2>&1 | tail -5"
 	SVN_CMD="svn checkout $SVN_URL $SVN_LOCAL_DIR | tail -5"
-#	SVN_CMD="svn checkout $SVN_URL $SVN_LOCAL_DIR | head -5"
 	pretty_execute $SVN_CMD
 	SVN_HAS_NEW=true
     fi
