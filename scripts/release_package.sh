@@ -99,7 +99,7 @@ if [ -d $WEB_ROOT ]; then
 	    echo "    $WWW_DIR Doesn't exist; copying docs"
 	    mkdir -m 755 -p $WWW_DIR
 	    cp -r $DOC_DIR/* $WWW_DIR
-	    chmod 755 $WWW_DIR/*
+	    chmod 755 -R $WWW_DIR
 	fi
 	# could move symlinking into the else block, but keep it for now to
 	# catch the ones we missed
