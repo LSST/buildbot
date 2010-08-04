@@ -3,7 +3,7 @@
 
 if [[ $1 == "" ]]
 then
-    echo "usage: $0 [-lsstdir dir] [-C] package [packages to check]"
+    echo "usage: $0 [-lsstdir dir] [-no_doxygen] [-C] package [packages to check]"
     exit 1
 fi
 
@@ -24,6 +24,12 @@ then
 else
     LSST_DIR="."
     export LSST_HOME=`pwd`
+fi
+
+if [ "$1" = "-no_doxygen" ]; then
+    echo "----- not copying doxygen -----"
+    NO_DOXYGEN="true"
+    shift
 fi
 
 if [ "$1" = "-C" ]; then
@@ -76,7 +82,9 @@ fi
 
 # only copy docs if this machine has a /var/www/html/doxygen
 step "Copy doxygen docs to www:"
-if [ -d $WEB_ROOT ]; then
+if [ "$NO_DOXYGEN" ]; then
+    echo "Not copying Doxygen docs by request"
+elif [ -d $WEB_ROOT ]; then
     for DOC_DIR in `find . -wholename \*doc/doxygen -o -wholename \*doc/htmlDir | grep -v EupsBuildDir`; do
 	OLD_IFS=$IFS
 	IFS="/" # now bash will split on / instead of white space
