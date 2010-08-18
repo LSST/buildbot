@@ -29,7 +29,7 @@ fetch_package_owners() {
 	fi
     fi
     if [ ! "$recipients" ]; then
-	recipients="bbb@illinois.edu"
+	recipients="robyn@lsst.org"
 	print "*** Did not find owner(s) of $1 in $url"
 	print "*** Expected \"package $1: owner@somewhere.edu, owner@gmail.com\""
 	print "*** Sending notification to $recipients instead.\""
