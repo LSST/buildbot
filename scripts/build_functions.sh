@@ -29,13 +29,13 @@ fetch_package_owners() {
 	fi
     fi
     if [ ! "$recipients" ]; then
-	recipients="robyn@lsst.org"
+	recipients="rallsman@lsst.org"
 	print "*** Did not find owner(s) of $1 in $url"
 	print "*** Expected \"package $1: owner@somewhere.edu, owner@gmail.com\""
 	print "*** Sending notification to $recipients instead.\""
     fi
     PACKAGE_OWNERS=$recipients
-    # PACKAGE_OWNERS="bbb@illinois.edu" # for debugging
+    # PACKAGE_OWNERS="rallsman@lsst.org" # for debugging
 }
 
 # test "pick_newest_version" with something like this:
@@ -332,25 +332,38 @@ lookup_svn_revision() {
     fi
 }
 
-KEEP_TRUNK="| grep -v afwdata | grep -v astrometry_net_data"
+KEEP_TRUNK="| grep -v afwdata | grep -v astrometry_net_data | grep -v isrdata "
 
-# update TRUNK_PACKAGE_COUNT to match the number of packages whose version matches svn#### or "trunk"
+# update TRUNK_PACKAGE_COUNT to match the number of packages whose (1) version matches svn#### or "trunk"  and (2) is NOT an external package
 count_trunk_packages() {
-    local count_cmd="eups list | grep -P \"svn|trunk\" | grep -v LOCAL $KEEP_TRUNK | wc -l"
-#    print $count_cmd
-    TRUNK_PACKAGE_COUNT=`eval $count_cmd`
-#    let TRUNK_PACKAGE_COUNT=TRUNK_PACKAGE_COUNT+`eups list | grep trunk | grep -v LOCAL | wc -l`
+
+    NOREMOVE=""
+    current_list_url="http://dev.lsstcorp.org/dmspkgs/current.list"
+    line=`curl -s $current_list_url | grep -i external | sed -e "s/ .*//"`
+    for i in $line; do      NOREMOVE="$NOREMOVE | grep -v $i"; done
+
+    TRUNK_PACKAGE_COUNT=`eval "eups list -s | grep -P \" svn| trunk\" | grep -v LOCAL $KEEP_TRUNK $NOREMOVE | sed -e \"s/ .*//\" | wc -l"`
+    debug "TRUNK_PACKAGE_COUNT:$TRUNK_PACKAGE_COUNT:"
 }
 
-# attempt eups remove on each package whose version matches svn#### or equals "trunk"
+# attempt eups remove on each package whose version matches svn#### or equals "trunk" and is NOT external
 remove_trunk_packages() {
-    local enumerate_cmd="eups list | grep -P \"svn|trunk\" $KEEP_TRUNK"
+    NOREMOVE=""
+    current_list_url="http://dev.lsstcorp.org/dmspkgs/current.list"
+    line=`curl -s $current_list_url | grep -i external | sed -e "s/ .*//"`
+    for i in $line; do      NOREMOVE="$NOREMOVE | grep -v $i"; done
+
+    local package_list=`eval "eups list -s | grep -P \" svn| trunk\" | grep -v LOCAL $KEEP_TRUNK $NOREMOVE | sed -e \"s/Setup//\" -e  \"s/Current//\""`
+    #debug "NOREMOVE:$NOREMOVE:"
+    #debug "KEEP_TRUNK:$KEEP_TRUNK:"
+
     local word
-    for word in `eval $enumerate_cmd`; do
+    debug "Potential packages to undeclare:$package_list:"
+    for word in $package_list; do
 	if [ "${word:0:3}" = "svn" -o "$word" = "trunk" ]; then
 	    local version=$word
-	    local is_setup=`eups list ctrl_events $version | grep -i setup`
-	    if [ $is_setup ]; then unsetup $package; fi
+	    local is_setup=`eups list $package $version | grep -i setup | wc -l`
+	    if [ $is_setup = 1 ]; then unsetup $package; fi
 	    verbose_execute "eups remove --force $package $version"
 	    #verbose_execute "eups undeclare --force $package $version"
 	else
