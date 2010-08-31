@@ -31,6 +31,12 @@ DEV_SERVER="lsstdev.ncsa.uiuc.edu"
 SVN_SERVER="svn.lsstcorp.org"
 WEB_ROOT="/var/www/html/doxygen"
 
+debug "========================"
+printenv
+debug "========================"
+eups list -s
+debug "========================"
+
 # -------------------
 # -- get arguments --
 # -------------------
@@ -76,10 +82,8 @@ if [ "$1" = "-log_url" ]; then
     LOG_URL=$2
     shift 2
 fi
-if  [ "$AGAINST" = "" ]; then
-    AGAINST="minimal"
-fi
 PACKAGE=$1
+#RAA#  If can get rid of the devenv_ packages, won't need RAW_PACKAGE
 RAW_PACKAGE=$PACKAGE # without devenv_ stripped off the front
 CHAIN=$INCOMING_CHAIN:$PACKAGE
 
@@ -88,17 +92,21 @@ TABLE_FILE_PREFIX=$PACKAGE
 # -------------------
 # -- special cases -- la la la I can't hear you
 # -------------------
-if [ $PACKAGE = "scons" ]; then
-    TABLE_FILE_PREFIX="sconsUtils" # ignore scons.table
-    print "special case: use $TABLE_FILE_PREFIX.table and ignore $PACKAGE.table"
-    SPECIAL_NOPROCESS_PACKAGE=true
+if [ $PACKAGE = "scons" -o ${PACKAGE:0:7} = "devenv_"  -o $PACKAGE = "sconsUtils" ]; then
+    exit 0
 fi
-if [ ${PACKAGE:0:7} = "devenv_" ]; then
-    print "special case: $PACKAGE means ${PACKAGE:7}"
-    PACKAGE=${PACKAGE:7}
-    TABLE_FILE_PREFIX=$PACKAGE
-    SPECIAL_NOPROCESS_PACKAGE=true
-fi
+
+#RAA# if [ $PACKAGE = "scons" ]; then
+#RAA#     TABLE_FILE_PREFIX="sconsUtils" # ignore scons.table
+#RAA#     print "special case: use $TABLE_FILE_PREFIX.table and ignore $PACKAGE.table"
+#RAA#     SPECIAL_NOPROCESS_PACKAGE=true
+#RAA# fi
+#RAA# if [ ${PACKAGE:0:7} = "devenv_" ]; then
+#RAA#     print "special case: $PACKAGE means ${PACKAGE:7}"
+#RAA#     PACKAGE=${PACKAGE:7}
+#RAA#     TABLE_FILE_PREFIX=$PACKAGE
+#RAA#     SPECIAL_NOPROCESS_PACKAGE=true
+#RAA# fi
 #if [ $PACKAGE = "sconsUtils" ]; then
 #    print "package $PACKAGE is redundant with scons; skipping"
 #    exit 0
@@ -380,11 +388,9 @@ step "Install $PACKAGE $VERSION"
 # -- setup self --
 # ------------------
 pushd $SVN_LOCAL_DIR > /dev/null
-#pretty_execute "eups list -s | grep scons # BEFORE setup"
-pretty_execute "eups list -s # BEFORE setup"
-pretty_execute "setup -r ."
+#pretty_execute "eups list -s # BEFORE setup"
+#pretty_execute "setup -r ."
 #pretty_execute "setup -r . --exact"
-#pretty_execute "eups list -s | grep scons # AFTER setup"
 pretty_execute "eups list -s # AFTER setup"
 pretty_execute "eups list $PACKAGE"
 if [ $RETVAL != 0 ]; then
@@ -410,16 +416,6 @@ if [ $SCONS_EXIT != 0 ]; then
     FAILED_INSTALL=true
 fi
 
-# Why would we want to eups declare this package?  I don't see a reason.
-# setup -r . && scons should be enough.
-#
-# pretty_execute "eups declare -r . $PACKAGE $VERSION"
-# # if no current version of self, declare self current
-# pretty_execute "eups list -c $PACKAGE | grep Current"
-# if [ ! "`eups list -c $PACKAGE | grep Current`" ]; then
-#     print "No version of $PACKAGE is declared current; declaring $VERSION current."
-#     pretty_execute eups declare -c $PACKAGE $VERSION
-# fi
 
 # preserve logs
 LOG_FILE="config.log"
