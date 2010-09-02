@@ -320,7 +320,7 @@ while [ $I -lt $NUM_DEPS ]; do
             if [ $? != 0 ]; then
                 print "Installation of $DEPENDENCY $DEP_VERSION failed"
                 # Remove vestiges of failed dependency; i.e. setup & directory
-                pretty_execute "eups delete --force $DEPENDENCY $DEP_VERSION"
+                pretty_execute "eups remove --force $DEPENDENCY $DEP_VERSION"
 
                 exit 1
             fi
@@ -340,7 +340,7 @@ done
 for CURRENT in `eups list -c | grep -v eups | sed -e "s/ .*//"`; do
     setup -j $CURRENT
 done
-pretty_execute "eups list -s"
+#pretty_execute "eups list -s"
 
 step "Install $PACKAGE $VERSION"
 # ------------------
