@@ -31,11 +31,6 @@ DEV_SERVER="lsstdev.ncsa.uiuc.edu"
 SVN_SERVER="svn.lsstcorp.org"
 WEB_ROOT="/var/www/html/doxygen"
 
-debug "========================"
-printenv
-debug "========================"
-eups list -s
-debug "========================"
 
 # -------------------
 # -- get arguments --
@@ -83,8 +78,6 @@ if [ "$1" = "-log_url" ]; then
     shift 2
 fi
 PACKAGE=$1
-#RAA#  If can get rid of the devenv_ packages, won't need RAW_PACKAGE
-RAW_PACKAGE=$PACKAGE # without devenv_ stripped off the front
 CHAIN=$INCOMING_CHAIN:$PACKAGE
 
 TABLE_FILE_PREFIX=$PACKAGE
@@ -95,22 +88,6 @@ TABLE_FILE_PREFIX=$PACKAGE
 if [ $PACKAGE = "scons" -o ${PACKAGE:0:7} = "devenv_"  -o $PACKAGE = "sconsUtils" ]; then
     exit 0
 fi
-
-#RAA# if [ $PACKAGE = "scons" ]; then
-#RAA#     TABLE_FILE_PREFIX="sconsUtils" # ignore scons.table
-#RAA#     print "special case: use $TABLE_FILE_PREFIX.table and ignore $PACKAGE.table"
-#RAA#     SPECIAL_NOPROCESS_PACKAGE=true
-#RAA# fi
-#RAA# if [ ${PACKAGE:0:7} = "devenv_" ]; then
-#RAA#     print "special case: $PACKAGE means ${PACKAGE:7}"
-#RAA#     PACKAGE=${PACKAGE:7}
-#RAA#     TABLE_FILE_PREFIX=$PACKAGE
-#RAA#     SPECIAL_NOPROCESS_PACKAGE=true
-#RAA# fi
-#if [ $PACKAGE = "sconsUtils" ]; then
-#    print "package $PACKAGE is redundant with scons; skipping"
-#    exit 0
-#fi
 
 # ------------------------
 # -- figure out version --
@@ -168,10 +145,10 @@ fi
 # ------------------------
 if [ "$VERSION" = "trunk" ] ;  then
     # get revision number for latest trunk change of package
-    lookup_svn_trunk_revision $RAW_PACKAGE
+    lookup_svn_trunk_revision $PACKAGE
     VERSION="svn$RET_REVISION"
 else
-    svn_url $RAW_PACKAGE $VERSION
+    svn_url $PACKAGE $VERSION
 fi
 SVN_URL=$RET_SVN_URL
 SVN_ADDL_ARG=$RET_SVN_ADDL_ARGS
@@ -329,8 +306,8 @@ while [ $I -lt $NUM_DEPS ]; do
 
     # already installed?  If not, install it
     if [ `eups list $DEPENDENCY $DEP_VERSION | wc -l` = 1 ]; then
-        debug "Dependency $DEPENDENCY $DEP_VERSION is already installed."
-#        setup $DEPENDENCY $DEP_VERSION
+        debug "Dependency $DEPENDENCY $DEP_VERSION is available."
+        setup -j $DEPENDENCY $DEP_VERSION
     else
         if [ ! "$DEP_OPTIONAL" ]; then
             # recursively install dependency
@@ -342,6 +319,9 @@ while [ $I -lt $NUM_DEPS ]; do
             $RECURSE_CMD
             if [ $? != 0 ]; then
                 print "Installation of $DEPENDENCY $DEP_VERSION failed"
+                # Remove vestiges of failed dependency; i.e. setup & directory
+                pretty_execute "eups delete --force $DEPENDENCY $DEP_VERSION"
+
                 exit 1
             fi
         fi
@@ -353,54 +333,32 @@ done
 # --------------------------------------------
 # -- setup precise versions of dependencies --
 # --------------------------------------------
-I=0
-while [ $I -lt $NUM_DEPS ]; do
-    if [ "${DEP_OPTIONALS[$I]}" ]; then
-        if [ `eups list ${DEPENDENCIES[$I]} | wc -l` != 0 ]; then
-            print "Optional dependency ${DEPENDENCIES[$I]} is available."
-            pretty_execute "setup ${DEPENDENCIES[$I]}"
-        else
-            print "Optional dependency ${DEPENDENCIES[$I]} is not available; skipping."
-        fi
-    elif [ ${DEP_VERSIONS[$I]} = "current" ]; then
-        print "${DEPENDENCIES[$I]}: using current version."
-        pretty_execute "setup ${DEPENDENCIES[$I]}"
-    else
-        pretty_execute "setup ${DEPENDENCIES[$I]} ${DEP_VERSIONS[$I]}"
-        if [ $RETVAL != 0 ]; then
-            print "Failed to $DEP_SETUP_CMD"
-            exit 1
-        fi
-    fi
-    let "I += 1"
-done
 
-# print versions of dependencies
-I=0
-echo
-while [ $I -lt $NUM_DEPS ]; do
-    print "${DEPENDENCIES[$I]} `eups list -s ${DEPENDENCIES[$I]}`"
-    let "I += 1"
+# This kludge is necessary since the 'setups' done for deeper nested calls are
+# lost when the nesting is popped.  Should probably figure a method of
+# collecting all the subsidiary 'setups' and reapply them in the current nest.
+for CURRENT in `eups list -c | grep -v eups | sed -e "s/ .*//"`; do
+    setup -j $CURRENT
 done
+pretty_execute "eups list -s"
 
 step "Install $PACKAGE $VERSION"
 # ------------------
 # -- setup self --
 # ------------------
 pushd $SVN_LOCAL_DIR > /dev/null
-#pretty_execute "eups list -s # BEFORE setup"
-#pretty_execute "setup -r ."
-#pretty_execute "setup -r . --exact"
-pretty_execute "eups list -s # AFTER setup"
-pretty_execute "eups list $PACKAGE"
+pretty_execute "eups declare -c -r . $PACKAGE $VERSION"
+if [ $RETVAL != 0 ]; then
+    print "Failed to declare current $PACKAGE $VERSION"
+    exit 1
+fi
+pretty_execute "setup  -j $PACKAGE $VERSION"
 if [ $RETVAL != 0 ]; then
     print "Failed to setup $PACKAGE $VERSION"
     exit 1
 fi
-popd > /dev/null
-
-# prepare for stuff in self directory
-pushd $SVN_LOCAL_DIR > /dev/null
+pretty_execute "eups list -s # AFTER setup"
+pretty_execute "eups list $PACKAGE"
 
 # ------------------
 # -- install self --
@@ -409,7 +367,6 @@ debug "Clean up previous attempt"
 quiet_execute scons -c
 scons_tests $PACKAGE
 pretty_execute "scons opt=3 install $SCONS_TESTS declare"
-#pretty_execute "scons opt=3 -j 2 force=true install $SCONS_TESTS declare"
 SCONS_EXIT=$RETVAL
 if [ $SCONS_EXIT != 0 ]; then
     print "Install/test failed: $PACKAGE $VERSION"
@@ -500,7 +457,7 @@ if [ ! "$INCOMING_CHAIN" ]; then
         if [ $TRUNK_PACKAGE_COUNT = $PREV_COUNT -a $TRUNK_PACKAGE_COUNT != "0" ]; then
             FAILED_INSTALL=true
             print "Failed to remove all trunk packages.  Some remain:"
-            eups list | grep svn | grep -v LOCAL
+            eups list | grep svn 
             break
         fi
     done

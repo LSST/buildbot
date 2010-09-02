@@ -67,7 +67,6 @@ package_is_external() {
     fetch_current_line $@
     local extra_dir=${CURRENT_LINE[3]}
     
-    debug "extra_dir = $extra_dir (${extra_dir:0:8})"
     if [ "${extra_dir:0:8}" = "external" ]; then
 	debug "$1 is an external package"
 	return 0
@@ -332,9 +331,12 @@ lookup_svn_revision() {
     fi
 }
 
-KEEP_TRUNK="| grep -v afwdata | grep -v astrometry_net_data | grep -v isrdata "
+KEEP_TRUNK="| grep -v afwdata | grep -v astrometry_net_data | grep -v isrdata | grep -v lsst | grep -v scons"
 
-# update TRUNK_PACKAGE_COUNT to match the number of packages whose (1) version matches svn#### or "trunk"  and (2) is NOT an external package
+# update TRUNK_PACKAGE_COUNT to match the number of packages whose 
+# (1) version matches svn#### or "trunk"  and 
+# (2) is NOT an external package and 
+# (3) is not a designated internal package
 count_trunk_packages() {
 
     NOREMOVE=""
