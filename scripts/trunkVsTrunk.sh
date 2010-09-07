@@ -161,7 +161,7 @@ SVN_LOCAL_DIR=svn/${PACKAGE}_${VERSION}
 if [ "$FORCE" -a -d $SVN_LOCAL_DIR ]; then
     lookup_svn_revision $SVN_LOCAL_DIR
     print "Remove existing $PACKAGE $REVISION"
-    pretty_execute "eups remove --force $PACKAGE $REVISION"
+    pretty_execute "eups remove -N --force $PACKAGE $REVISION"
     # remove svn dir, to force re-checkout
     pretty_execute "rm -rf $SVN_LOCAL_DIR"
 fi
@@ -343,21 +343,20 @@ done
 #pretty_execute "eups list -s"
 
 step "Install $PACKAGE $VERSION"
+
 # ------------------
 # -- setup self --
 # ------------------
+
+FULL_PATH_TO_SVN_LOCAL_DIR="LOCAL:`pwd`/$SVN_LOCAL_DIR"
+
+# Why is this needed? Because afw fails on "import lsst.afw.scons.SconsUtils"
+pretty_execute "setup -j $PACKAGE $FULL_PATH_TO_SVN_LOCAL_DIR"
+
+#  All remaining work until end is done within the package's source directory
 pushd $SVN_LOCAL_DIR > /dev/null
-pretty_execute "eups declare -c -r . $PACKAGE $VERSION"
-if [ $RETVAL != 0 ]; then
-    print "Failed to declare current $PACKAGE $VERSION"
-    exit 1
-fi
-pretty_execute "setup  -j $PACKAGE $VERSION"
-if [ $RETVAL != 0 ]; then
-    print "Failed to setup $PACKAGE $VERSION"
-    exit 1
-fi
-pretty_execute "eups list -s # AFTER setup"
+
+pretty_execute "eups list -s # AFTER setups"
 pretty_execute "eups list $PACKAGE"
 
 # ------------------
@@ -366,13 +365,15 @@ pretty_execute "eups list $PACKAGE"
 debug "Clean up previous attempt"
 quiet_execute scons -c
 scons_tests $PACKAGE
-pretty_execute "scons opt=3 install $SCONS_TESTS declare"
+pretty_execute "scons opt=3 $SCONS_TESTS"
 SCONS_EXIT=$RETVAL
 if [ $SCONS_EXIT != 0 ]; then
     print "Install/test failed: $PACKAGE $VERSION"
     FAILED_INSTALL=true
 fi
 
+# Now undo the previously setup package LOCAL:version
+unsetup -j -N $PACKAGE
 
 # preserve logs
 LOG_FILE="config.log"
@@ -391,27 +392,8 @@ else
     fi
 fi
 
-if [ $VERSION = "trunk" ]; then
-    # ------------------
-    # -- copy doxygen -- (only trunk -- tagged releases are handled by nightly fresh install)
-    # ------------------
-    if [ -d $WEB_ROOT ]; then
-        HTML_DIR=$WEB_ROOT/trunk/$PACKAGE
-        if [ -d doc/htmlDir ]; then
-            step "Copying Doxygen docs to web server"
-            if [ -d $HTML_DIR ]; then
-                rm -rf $HTML_DIR
-            fi
-            pretty_execute -anon mkdir -m 755 -p $HTML_DIR
-            pretty_execute -anon cp -r doc/htmlDir/* $HTML_DIR
-            pretty_execute -anon chmod 644 $HTML_DIR/*
-        fi
-    else
-        print "Not copying Doxygen docs - $WEB_ROOT does not exist"
-    fi
-fi
 
-if [ $VERSION = "trunk" -a ! "$FAILED_INSTALL" ]; then
+if [  ! $FAILED_INSTALL ]; then
     # ----------------------------
     # -- check for failed tests --
     # ----------------------------
@@ -434,36 +416,43 @@ if [ $VERSION = "trunk" -a ! "$FAILED_INSTALL" ]; then
     fi
 fi
 
-# done with stuff in self directory
-popd > /dev/null
-
-# -----------------------------------------
-# -- Remove any remaining trunk packages --
-# -----------------------------------------
-# Note: only do this from root of recursive install -- that is, if chain is
-# empty
-if [ ! "$INCOMING_CHAIN" ]; then
-    step "Build provenance of $PACKAGE"
-    pretty_execute "eups list -s"
-    pretty_execute "gcc -v"
-
-    step "Remove trunk packages"
-    count_trunk_packages
-    while [ $TRUNK_PACKAGE_COUNT != "0" ]; do
-        PREV_COUNT=$TRUNK_PACKAGE_COUNT
-        remove_trunk_packages
-        count_trunk_packages
-        debug "Trunk package count = $TRUNK_PACKAGE_COUNT (previously $PREV_COUNT)"
-        if [ $TRUNK_PACKAGE_COUNT = $PREV_COUNT -a $TRUNK_PACKAGE_COUNT != "0" ]; then
-            FAILED_INSTALL=true
-            print "Failed to remove all trunk packages.  Some remain:"
-            eups list | grep svn 
-            break
-        fi
-    done
+if [  ! $FAILED_INSTALL ]; then
+    # -------------------------------------------------
+    # -- Package built OK, now setup for permanent use
+    # -------------------------------------------------
+    eups list -v $PACKAGE $VERSION
+    pretty_execute "eups undeclare $PACKAGE $FULL_PATH_TO_SVN_LOCAL_DIR"
+    if [ $RETVAL != 0 ]; then
+        print "Failed to undeclare $PACKAGE $FULL_PATH_TO_SVN_LOCAL_DIR"
+        FAILED_INSTALL=true
+    fi
+    pretty_execute "eups declare -c -r . $PACKAGE $VERSION"
+    if [ $RETVAL != 0 ]; then
+        print "Failed to declare $PACKAGE $VERSION"
+        FAILED_INSTALL=true
+    fi
+    eups list -v $PACKAGE $VERSION
+    pretty_execute "setup  -j $PACKAGE $VERSION"
+    if [ $RETVAL != 0 ]; then
+        print "Failed to setup $PACKAGE $VERSION"
+        FAILED_INSTALL=true
+    fi
+    eups list -v $PACKAGE $VERSION
 fi
 
-if [ "$FAILED_INSTALL" ]; then
+if [ $FAILED_INSTALL ]; then
+    # clear away potentially enduring detritus of the failed package build
+    if [ `eups list $PACKAGE $VERSION | wc -l` != 0 ]; then
+        pretty_execute "eups list $PACKAGE $VERSION"
+        pretty_execute "eups remove --nocheck --force $PACKAGE $VERSION"
+        #pretty_execute "eups list $PACKAGE $VERSION"
+    fi
+    # return to primary work directory so can 'rm' the source directory
+    popd 
+    if [ "${SVN_LOCAL_DIR:0:4}" = "svn/" ]; then
+        echo "rm -rf $SVN_LOCAL_DIR"
+        rm -rf $SVN_LOCAL_DIR
+    fi
     print "Installation of $PACKAGE $VERSION failed."
     exit 1
 else
