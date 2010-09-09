@@ -4,7 +4,7 @@
 
 usage() {
 #80 cols  ................................................................................
-    echo "Usage: $0 [options] package version"
+    echo "Usage: $0 [options] package"
     echo "Install a requested package from version control (trunk), and recursively"
     echo "ensure that its dependencies are also installed from version control."
     echo
@@ -12,16 +12,11 @@ usage() {
     echo "          -verbose: print out extra debugging info"
     echo "            -force: if the package is already installed, re-install it"
     echo "         -indent N: spaces to indent output as a hint to recursion depth"
-    echo "   -chain <prefix>: a string representing the installation recursion state"
     echo " -dont_log_success: if specified, only save logs if install fails"
     echo "  -log_dest <dest>: scp destination for config.log,"
     echo "                    for example \"buildbot@master:/var/www/html/logs\""
     echo "    -log_url <url>: URL prefix for the log destination,"
     echo "                    for example \"http://master/logs/\""
-    echo "           version: trunk - the latest trunk version from SVN"
-    echo "                    current - the version in current.list"
-    echo "                    svn#### - svn revision ####"
-    echo "                    arbitrary - any legitimate released version of a package"
 }
 source /lsst/stacks/default/loadLSST.sh
 source ${0%/*}/build_functions.sh
@@ -53,10 +48,6 @@ if [ "$1" = "-indent" ]; then
     shift 2
 fi
 
-if [ "$1" = "-chain" ]; then
-    INCOMING_CHAIN=$2
-    shift 2
-fi
 
 if [ "$1" = "-dont_log_success" ]; then
     shift
@@ -78,384 +69,232 @@ if [ "$1" = "-log_url" ]; then
     shift 2
 fi
 PACKAGE=$1
-CHAIN=$INCOMING_CHAIN:$PACKAGE
 
-TABLE_FILE_PREFIX=$PACKAGE
+WORK_PWD=`pwd`
 
-# -------------------
-# -- special cases -- la la la I can't hear you
-# -------------------
-if [ $PACKAGE = "scons" -o ${PACKAGE:0:7} = "devenv_"  -o $PACKAGE = "sconsUtils" ]; then
-    exit 0
-fi
+#*************************************************************************
 
-# ------------------------
-# -- figure out version --
-# ------------------------
-step "Determine version of $PACKAGE to test"
+#*************************************************************************
+step "Determine if $PACKAGE will be tested"
 
 package_is_external $PACKAGE
-if [ $? = 0 ]; then EXTERNAL=true; fi
-if [ $SPECIAL_NOPROCESS_PACKAGE ]; then EXTERNAL=true; fi
-
-SYMBOLIC_VERSION=$2
-if [ ! "$SYMBOLIC_VERSION" ]; then
-    print "Please specify a version."
-    usage
-    exit 1
-fi
-VERSION=$SYMBOLIC_VERSION                                      #RAA#
-
-# decide whether to install with lsstpkg or from svn with scons
-#
-# we use lsstpkg to install all non-trunk and non-svn####
-# packages.  
-#
-if [ $SYMBOLIC_VERSION = "trunk" -o "${VERSION:0:3}" = "svn" ]; then
-    INSTALL_FROM_SVN="true"
-    if [ "$EXTERNAL" ]; then
-        # external packages must be current or a specific non-svn version
-        print "Unexpected version for external package $PACKAGE: $SYMBOLIC_VERSION ($VERSION)"
-        exit 1
-    fi
-fi
-
-debug "package = $PACKAGE; version = $VERSION; external = $EXTERNAL"
-
-# --------------------------------
-# -- prep current install state --
-# --------------------------------
-# install external package with lsstpkg
-if [ ! "$INSTALL_FROM_SVN" ]; then
-    step "Install release package $PACKAGE $VERSION"
-    eups list $PACKAGE
-    INSTALL_CMD="lsstpkg install $PACKAGE $VERSION"
-    pretty_execute $INSTALL_CMD
-    if [ $RETVAL != 0 ]; then
-        print "Failed to install $PACKAGE $VERSION with lsstpkg."
-    else
-        print "$PACKAGE successfully installed."
-        print "Package $PACKAGE $VERSION is external; no need to test dependencies"
-        exit 0
-    fi
-fi
-
-# ------------------------
-# -- check out from svn --
-# ------------------------
-if [ "$VERSION" = "trunk" ] ;  then
-    # get revision number for latest trunk change of package
-    lookup_svn_trunk_revision $PACKAGE
-    VERSION="svn$RET_REVISION"
-else
-    svn_url $PACKAGE $VERSION
-fi
-SVN_URL=$RET_SVN_URL
-SVN_ADDL_ARG=$RET_SVN_ADDL_ARGS
-REVISION=$RET_REVISION
-
-mkdir -p svn
-SVN_LOCAL_DIR=svn/${PACKAGE}_${VERSION}
-
-# if force, remove existing package
-if [ "$FORCE" -a -d $SVN_LOCAL_DIR ]; then
-    lookup_svn_revision $SVN_LOCAL_DIR
-    print "Remove existing $PACKAGE $REVISION"
-    pretty_execute "eups remove -N --force $PACKAGE $REVISION"
-    # remove svn dir, to force re-checkout
-    pretty_execute "rm -rf $SVN_LOCAL_DIR"
-fi
-
-if [ ! -d $SVN_LOCAL_DIR ]; then
-    step "Check out $PACKAGE $VERSION from $SVN_URL"
-    SVN_COMMAND="svn checkout $SVN_URL $SVN_LOCAL_DIR $SVN_ADDL_ARGS"
-else
-    step "Update $PACKAGE $VERSION from svn"
-    SVN_COMMAND="svn update $SVN_LOCAL_DIR $SVN_ADDL_ARGS"
-fi
-verbose_execute $SVN_COMMAND
-if [ $RETVAL != 0 ]; then
-    print "svn checkout or update failed; is $PACKAGE $VERSION a valid version?"
-    exit 1
-fi
-
-step "Prepare dependencies"
-# --------------------------------------
-# -- collect and install dependencies --
-# --------------------------------------
-# To Do: switch to use "eups list <package> <version> --dependencies --depth ==1"
-# (when Robert releases the next version of eups)
-TABLE_FILE="$SVN_LOCAL_DIR/ups/$TABLE_FILE_PREFIX.table"
-if [ ! -f $TABLE_FILE ]; then
-    print "Table file $TABLE_FILE doesn't exist."
-    exit 1
-fi
-
-# split lines of table file
-OLD_IFS=$IFS
-IFS=${IFS:2:3} # hack -- newline is the third char in default IFS
-NUM_DEPS=0
-unset DEPS
-unset DEPENDENCIES
-# sed: strip off leading spaces and tabs
-for DEP_LINE in `grep -P setupRequired\|setupOptional $TABLE_FILE | sed 's/^[ \t]*//'`; do
-    DEPS[$NUM_DEPS]=$DEP_LINE
-    let "NUM_DEPS += 1"
-done
-IFS=$OLD_IFS
-
-# extract dependency names & versions from lines of table file
-# recursively install each dependency and call setup
-I=0
-while [ $I -lt $NUM_DEPS ]; do
-    # of the form setupRequired(coral >= 1_9_0+1), maybe with leading spaces
-    DEP=${DEPS[$I]}
-#    if [ `expr match "$DEP" "setupRequired(.+)"` ]; then
-    if [ ${DEP:0:13} == "setupRequired" ]; then
-        unset DEP_OPTIONAL
-        EXTRACTED=${DEP#*setupRequired(} # trim off prefix
-    elif  [ ${DEP:0:13} == "setupOptional" ]; then
-        DEP_OPTIONAL="true"        
-        EXTRACTED=${DEP#*setupOptional(} # trim off prefix
-    else
-        print "unexpected format in $TABLE_FILE: '$DEP'"
-        exit 1
-    fi
-    EXTRACTED=${EXTRACTED%)*} # trim off suffix
-    EXTRACTED=${EXTRACTED#\"} # trim off leading double quote
-    EXTRACTED=${EXTRACTED%\"} # trim off trailing double quote
-    
-    # separate version and name of dependency
-    unset EXTERNAL
-    unset SPECIAL_NOPROCESS_PACKAGE
-    split $EXTRACTED
-    N=${#RET[*]}
-    DEPENDENCY=${RET[0]}
-    if [ $DEPENDENCY = "scons"  -o ${DEPENDENCY:0:7} = "devenv_" ]; then
-        SPECIAL_NOPROCESS_PACKAGE=true
-    fi
-    package_is_external $DEPENDENCY
-    if [ $? = 0 ]; then EXTERNAL=true; fi
-    if [ $SPECIAL_NOPROCESS_PACKAGE ]; then EXTERNAL=true; fi
-
-    # If Dependency is NOT external, then just check it out from SVN trunk
-    if [ ! $EXTERNAL ]; then
-        lookup_svn_trunk_revision $DEPENDENCY
-        DEP_VERSION="svn$RET_REVISION"
-        print "Found dependency of internal package: $EXTRACTED: assuming trunk version ($DEP_VERSION)."
-
-    else  # Dependency is external, select the 'best' version to use
-        if [ "$DEP_OPTIONAL" ]; then
-            DEP_VERSION=""
-            J=0
-            # Check for special case: listed in both required and optional.  For
-            # example, in ip_isr, pex_harness is both, with a specific version
-            # listed as required.  We'll let the required version supercede the
-            # optional version, and treat it as required for now.
-            while [ $J -lt $I ]; do
-                if [ "${DEPENDENCIES[$J]}" == "$DEPENDENCY" ]; then
-                    print "External $DEPENDENCY is listed as both setupRequired and setupOptional; treating as setupRequired(${DEP_VERSIONS[$J]})."
-                    DEP_VERSION=${DEP_VERSIONS[$J]} # supercede optional version
-                    unset DEP_OPTIONAL # treat this package as required
-                fi
-                let "J += 1"
-            done
-        elif [ $N = 1 ]; then # setupRequired(dep)
-            lookup_current_version $DEPENDENCY
-            DEP_VERSION=$RET_CURRENT_VERSION
-        elif [ $N = 2 ]; then # setupRequired(dep 3.0)
-            DEP_VERSION=${RET[1]}
-        elif [ $N = 3 ]; then # setupRequired(dep >= 3.0)
-            if [ ${RET[1]} = ">" ]; then
-                # 1. if current version is newer than the inadequate version, then use the current version
-                lookup_current_version $DEPENDENCY
-                pick_newest_version $RET_CURRENT_VERSION ${RET[2]}
-                debug "Checking external dependency $EXTRACTED.  Current version is $RET_CURRENT_VERSION; inadequate version is ${RET[2]}."
-                # note: watch out for case where current version is equal to inadequate version
-                if [ "$RET_NEWEST_VERSION" == "$RET_CURRENT_VERSION" -a "$RET_CURRENT_VERSION" != "${RET[2]}" ]; then
-                    DEP_VERSION=$RET_CURRENT_VERSION
-                    print "Found external dependency $EXTRACTED: current version ($RET_CURRENT_VERSION) is sufficient."
-                fi
-            elif [ ${RET[1]} = ">=" -o ${RET[1]} = "=" -o ${RET[1]} = "==" ]; then
-                DEP_VERSION=${RET[2]}
-            else
-                print "Unsupported comparison in '$DEP': '${RET[1]}'"
-                exit 1
-            fi
-        else
-            print "Unable to parse external dependency '$DEP'"
-            exit 1
-        fi
-    
-        # if required version newer, use newer
-        if [ ! "$DEP_OPTIONAL" ]; then 
-            # pick newest of (current, minimum) so that if an old version is listed
-            # as minimum, we'll use the current, but if a newer-than-current version
-            # is specified, we'll use that instead
-            lookup_current_version $DEPENDENCY
-            pick_newest_version $DEP_VERSION $RET_CURRENT_VERSION
-            DEP_VERSION=$RET_NEWEST_VERSION
-        fi
-    fi
-######################################################################3
-
-    # remember for setup step later
-    DEPENDENCIES[$I]=$DEPENDENCY
-    DEP_VERSIONS[$I]=$DEP_VERSION
-    DEP_OPTIONALS[$I]=$DEP_OPTIONAL
-
-    # already installed?  If not, install it
-    if [ `eups list $DEPENDENCY $DEP_VERSION | wc -l` = 1 ]; then
-        debug "Dependency $DEPENDENCY $DEP_VERSION is available."
-        setup -j $DEPENDENCY $DEP_VERSION
-    else
-        if [ ! "$DEP_OPTIONAL" ]; then
-            # recursively install dependency
-            NEW_INDENT=$INDENT
-            let "NEW_INDENT += 4"
-            print "Recursively installing $DEPENDENCY $DEP_VERSION"
-            RECURSE_CMD="$0 -indent $NEW_INDENT -chain $CHAIN $LOG_ARGS $DEPENDENCY $DEP_VERSION"
-            debug $RECURSE_CMD
-            $RECURSE_CMD
-            if [ $? != 0 ]; then
-                print "Installation of $DEPENDENCY $DEP_VERSION failed"
-                # Remove vestiges of failed dependency; i.e. setup & directory
-                pretty_execute "eups remove --force $DEPENDENCY $DEP_VERSION"
-
-                exit 1
-            fi
-        fi
-    fi
-
-    let "I += 1"
-done
-
-# --------------------------------------------
-# -- setup precise versions of dependencies --
-# --------------------------------------------
-
-# This kludge is necessary since the 'setups' done for deeper nested calls are
-# lost when the nesting is popped.  Should probably figure a method of
-# collecting all the subsidiary 'setups' and reapply them in the current nest.
-for CURRENT in `eups list -c | grep -v eups | sed -e "s/ .*//"`; do
-    setup -j $CURRENT
-done
-#pretty_execute "eups list -s"
-
-step "Install $PACKAGE $VERSION"
-
-# ------------------
-# -- setup self --
-# ------------------
-
-FULL_PATH_TO_SVN_LOCAL_DIR="LOCAL:`pwd`/$SVN_LOCAL_DIR"
-
-# Why is this needed? Because afw fails on "import lsst.afw.scons.SconsUtils"
-pretty_execute "setup -j $PACKAGE $FULL_PATH_TO_SVN_LOCAL_DIR"
-
-#  All remaining work until end is done within the package's source directory
-pushd $SVN_LOCAL_DIR > /dev/null
-
-pretty_execute "eups list -s # AFTER setups"
-pretty_execute "eups list $PACKAGE"
-
-# ------------------
-# -- install self --
-# ------------------
-debug "Clean up previous attempt"
-quiet_execute scons -c
-scons_tests $PACKAGE
-pretty_execute "scons opt=3 $SCONS_TESTS"
-SCONS_EXIT=$RETVAL
-if [ $SCONS_EXIT != 0 ]; then
-    print "Install/test failed: $PACKAGE $VERSION"
-    FAILED_INSTALL=true
-fi
-
-# Now undo the previously setup package LOCAL:version
-unsetup -j -N $PACKAGE
-
-# preserve logs
-LOG_FILE="config.log"
-pretty_execute pwd
-if [ "$LOG_DEST" -a "(" "$FAILED_INSTALL" -o "$LOG_SUCCESS" ")" ]; then
-    if [ -f "$LOG_FILE" ]; then
-        copy_log ${PACKAGE}_$VERSION/$LOG_FILE $LOG_FILE $LOG_DEST_HOST $LOG_DEST_DIR $PACKAGE/$VERSION $LOG_URL
-    else
-        print "No $LOG_FILE present."
-    fi
-else
-    if [ -f "$LOG_FILE" ]; then
-        print "Not preserving config.log."
-    else
-        print "No config.log generated."
-    fi
-fi
-
-
-if [  ! $FAILED_INSTALL ]; then
-    # ----------------------------
-    # -- check for failed tests --
-    # ----------------------------
-    step "Checking for failed tests"
-    if [ -d tests ]; then
-        FAILED_COUNT=`find tests -name "*.failed" | wc -l`
-        if [ $FAILED_COUNT != "0" ]; then
-            print "Some tests failed:"
-            pretty_execute -anon 'find tests -name "*.failed"'
-            # cat .failed files to stdout
-            for FAILED_FILE in `find tests -name "*.failed"`; do
-                pretty_execute "cat $FAILED_FILE"
-            done
-            FAILED_INSTALL=true
-        else
-            print "All tests succeeded in $PACKAGE"
-        fi
-    else
-        print "No tests found in $PACKAGE"
-    fi
-fi
-
-if [  ! $FAILED_INSTALL ]; then
-    # -------------------------------------------------
-    # -- Package built OK, now setup for permanent use
-    # -------------------------------------------------
-    eups list -v $PACKAGE $VERSION
-    pretty_execute "eups undeclare $PACKAGE $FULL_PATH_TO_SVN_LOCAL_DIR"
-    if [ $RETVAL != 0 ]; then
-        print "Failed to undeclare $PACKAGE $FULL_PATH_TO_SVN_LOCAL_DIR"
-        FAILED_INSTALL=true
-    fi
-    pretty_execute "eups declare -c -r . $PACKAGE $VERSION"
-    if [ $RETVAL != 0 ]; then
-        print "Failed to declare $PACKAGE $VERSION"
-        FAILED_INSTALL=true
-    fi
-    eups list -v $PACKAGE $VERSION
-    pretty_execute "setup  -j $PACKAGE $VERSION"
-    if [ $RETVAL != 0 ]; then
-        print "Failed to setup $PACKAGE $VERSION"
-        FAILED_INSTALL=true
-    fi
-    eups list -v $PACKAGE $VERSION
-fi
-
-if [ $FAILED_INSTALL ]; then
-    # clear away potentially enduring detritus of the failed package build
-    if [ `eups list $PACKAGE $VERSION | wc -l` != 0 ]; then
-        pretty_execute "eups list $PACKAGE $VERSION"
-        pretty_execute "eups remove --nocheck --force $PACKAGE $VERSION"
-        #pretty_execute "eups list $PACKAGE $VERSION"
-    fi
-    # return to primary work directory so can 'rm' the source directory
-    popd 
-    if [ "${SVN_LOCAL_DIR:0:4}" = "svn/" ]; then
-        echo "rm -rf $SVN_LOCAL_DIR"
-        rm -rf $SVN_LOCAL_DIR
-    fi
-    print "Installation of $PACKAGE $VERSION failed."
-    exit 1
-else
-    print "Installation of $PACKAGE $VERSION succeeded."
+if [ $? = 0 ]; then 
+    print "External packages are not tested via trunk-vs-trunk"
     exit 0
 fi
+if [ ${PACKAGE:0:5} = "scons" \
+    -o ${PACKAGE:0:7} = "devenv_"  \
+    -o $PACKAGE = "gcc"  \
+    -o $PACKAGE = "afwdata" \
+    -o $PACKAGE = "astrometry_net_data" \
+    -o $PACKAGE = "isrdata"  \
+    -o $PACKAGE = "auton"  \
+    -o $PACKAGE = "ssd"  \
+    -o ${PACKAGE:0:4} = "lsst" ]; then 
+    print "Selected packages are not tested via trunk-vs-trunk, $PACKAGE is one of them"
+    exit 0
+fi
+
+#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+step "Sequence Dependency Chain"
+
+CUR_COUNT=0
+python /home/buildbot/scripts/orderDependents.py $PACKAGE > /tmp/tVtList.tmp
+
+print "Order of dependency processing"
+while read LINE; 
+do
+    print "   $CUR_COUNT  $LINE"
+    (( CUR_COUNT++ ))
+done < "/tmp/tVtList.tmp"
+
+
+
+CUR_COUNT=0
+while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS
+do
+    cd $WORK_PWD
+    #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    step "Install dependency: $CUR_PACKAGE for $PACKAGE build"
+
+    # -- Process external or special-case packages  via lsstpkg --
+    package_is_external ${CUR_PACKAGE}
+    if [ $? = 0 ]; then
+        print "Installing external package: $CUR_PACKAGE $CUR_VERSION"
+
+        if [ `eups list $CUR_PACKAGE $CUR_VERSION | wc -l` = 0 ]; then
+            INSTALL_CMD="lsstpkg install $CUR_PACKAGE $CUR_VERSION"
+            pretty_execute $INSTALL_CMD
+            if [ $RETVAL != 0 ]; then
+                print "Failed to install $CUR_PACKAGE $CUR_VERSION with lsstpkg."
+                exit 1
+            else
+                print "Dependency: $CUR_PACKAGE, successfully installed."
+            fi
+        fi
+        setup -j $CUR_PACKAGE $CUR_VERSION
+        if [ $RETVAL != 0 ]; then
+            print "Failed to setup dependency: $CUR_PACKAGE $CUR_VERSION."
+            exit 1
+        fi
+        print "Dependency: $CUR_PACKAGE $CUR_VERSION, successfully installed."
+        continue
+    fi
+
+
+    # -- Process special lsst packages  neither external nor svn-able --
+    if [ ${CUR_PACKAGE:0:5} = "scons" \
+        -o ${CUR_PACKAGE:0:7} = "devenv_"  \
+        -o $CUR_PACKAGE = "gcc"  \
+        -o $CUR_PACKAGE = "afwdata" \
+        -o $CUR_PACKAGE = "astrometry_net_data" \
+        -o $CUR_PACKAGE = "isrdata"  \
+        -o $CUR_PACKAGE = "auton"  \
+        -o $CUR_PACKAGE = "ssd"  \
+        -o ${CUR_PACKAGE:0:4} = "lsst" ]; then 
+        # Attempt setup of named package/version; don't exit if failure occurs
+        setup -j $CUR_PACKAGE $CUR_VERSION
+        if [ $? = 0 ]; then
+            print "Special-case dependency: $CUR_PACKAGE $CUR_VERSION  successfully installed"
+        else
+            print "Special-case dependency: $CUR_PACKAGE $CUR_VERSION  not available. Continuing without it."
+        fi
+        continue
+    fi
+
+    # -- Process lsst packages --
+    #First a little adjustment of naming: mops -> mops_nightmops
+    if [ "$CUR_PACKAGE" = "mops" ]; then
+        CUR_PACKAGE="mops_nightmops"
+    fi
+
+    # package is internal and should be built from trunk
+    lookup_svn_trunk_revision $CUR_PACKAGE
+    PLAIN_VERSION="$RET_REVISION"
+    RET_REVISION="svn$RET_REVISION"
+    SVN_URL=$RET_SVN_URL
+    REVISION=$RET_REVISION
+
+    print "Internal package: $CUR_PACKAGE will be built from trunk version: $PLAIN_VERSION"
+    
+    mkdir -p svn
+    SVN_LOCAL_DIR=svn/${CUR_PACKAGE}_$PLAIN_VERSION
+    
+# RAA #
+#        #_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#
+#  F I X    Following should, if nec: 1 unsetup, 2 eups remove, 3 rmdir  F I X
+#        #_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#
+# RAA #
+    # if force, remove existing package
+    if [ "$FORCE" -a -d $SVN_LOCAL_DIR ]; then
+        lookup_svn_revision $SVN_LOCAL_DIR
+        print "Remove existing $CUR_PACKAGE $REVISION"
+        if [ `eups list $CUR_PACKAGE $REVISION | grep Setup | wc -l` = 1 ]; then
+            unsetup -j $CUR_PACKAGE $REVISION
+        fi
+        pretty_execute "eups remove -N $CUR_PACKAGE $REVISION"
+        # remove svn dir, to force re-checkout
+        pretty_execute "rm -rf $SVN_LOCAL_DIR"
+    fi
+    
+    if [ ! -d $SVN_LOCAL_DIR ]; then
+        step "Check out $CUR_PACKAGE $REVISION from $SVN_URL"
+        SVN_COMMAND="svn checkout $SVN_URL $SVN_LOCAL_DIR "
+    else
+        step "Update $CUR_PACKAGE $REVISION from svn"
+        SVN_COMMAND="svn update $SVN_LOCAL_DIR "
+    fi
+    verbose_execute $SVN_COMMAND
+    if [ $RETVAL != 0 ]; then
+        print "svn checkout or update failed; is $CUR_PACKAGE $REVISION a valid version?"
+        exit 1
+    fi
+
+
+    # -------------------------------
+    # -- setup for a package build --
+    # -------------------------------
+    
+    FULL_PATH_TO_SVN_LOCAL_DIR="LOCAL:$WORK_PWD/$SVN_LOCAL_DIR"
+    pretty_execute "setup -j $CUR_PACKAGE $FULL_PATH_TO_SVN_LOCAL_DIR"
+    
+    # ----------------------------------------------------------------
+    # -- Rest of work is done within the package's source directory --
+    # ----------------------------------------------------------------
+    cd $SVN_LOCAL_DIR > /dev/null
+    
+    pretty_execute "eups list -s # AFTER setups"
+    pretty_execute "eups list $CUR_PACKAGE"
+    
+    #RAA#debug "Clean up previous build attempt in directory"
+    #RAA#quiet_execute scons -c
+    scons_tests $CUR_PACKAGE
+    pretty_execute "scons opt=3 install $SCONS_TESTS"
+    SCONS_EXIT=$RETVAL
+    if [ $SCONS_EXIT != 0 ]; then
+        print "Install/test failed: $CUR_PACKAGE $REVISION"
+        FAILED_INSTALL=true
+    fi
+    
+    # preserve logs
+    LOG_FILE="config.log"
+    pretty_execute pwd
+    if [ "$LOG_DEST" -a "(" "$FAILED_INSTALL" -o "$LOG_SUCCESS" ")" ]; then
+        if [ -f "$LOG_FILE" ]; then
+            copy_log ${CUR_PACKAGE}_$REVISION/$LOG_FILE $LOG_FILE $LOG_DEST_HOST $LOG_DEST_DIR ${CUR_PACKAGE}/$REVISION $LOG_URL
+        else
+            print "No $LOG_FILE present."
+        fi
+    else
+        if [ -f "$LOG_FILE" ]; then
+            print "Not preserving config.log."
+        else
+            print "No config.log generated."
+        fi
+    fi
+    
+    
+    if [  ! $FAILED_INSTALL ]; then
+        # ----------------------------
+        # -- check for failed tests --
+        # ----------------------------
+        step "Checking for failed tests"
+        if [ -d tests ]; then
+            FAILED_COUNT=`find tests -name "*.failed" | wc -l`
+            if [ $FAILED_COUNT != "0" ]; then
+                print "Some tests failed:"
+                pretty_execute -anon 'find tests -name "*.failed"'
+                # cat .failed files to stdout
+                for FAILED_FILE in `find tests -name "*.failed"`; do
+                    pretty_execute "cat $FAILED_FILE"
+                done
+                FAILED_INSTALL=true
+            else
+                print "All tests succeeded in $CUR_PACKAGE"
+            fi
+        else
+            print "No tests found in $CUR_PACKAGE"
+        fi
+    fi
+    
+    if [ $FAILED_INSTALL ]; then
+        # -----------------------------------------------------------------------
+        # -- return to primary work directory so can 'rm' the source directory --
+        # -----------------------------------------------------------------------
+        cd $WORK_PWD
+
+        print "Installation of $CUR_PACKAGE $REVISION failed."
+        print "Unable to build trunk-vs-trunk version of $PACKAGE due to failed build of dependency: $CUR_PACKAGE $REVISION ."
+        exit 1
+    fi
+
+    # -------------------------------------------------
+    # -- Loop around to next entry in dependency list --
+    # -------------------------------------------------
+    (( CUR_COUNT++ ))
+
+done < "/tmp/tVtList.tmp"
+
+
+print "Successfully built trunk-vs-trunk version of $PACKAGE"
+exit 0
