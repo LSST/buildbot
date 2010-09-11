@@ -117,7 +117,7 @@ svn_server_dir() {
 # fetch $1's line from current.list, and set $CURRENT_LINE to its
 # contents, as an array, split by white space
 fetch_current_line() {
-    debug "Look up current version of $1 in current.list"
+    debug "Look up current version of $1 in http://$DEV_SERVER/dmspkgs/current.list"
     local current_list_url="http://$DEV_SERVER/dmspkgs/current.list"
     local active_list_url="http://$DEV_SERVER/dmspkgs/active.list"
     local line=`curl -s $current_list_url | grep "^$1 "`

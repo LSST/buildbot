@@ -14,7 +14,7 @@ if len(args) != 1:
     parser.error("provide a eups PACKAGE name ")
 root_package = args[0]
 
-cmd = "eups list -D %s | sed -e \"s/| /||/g\" -e \"s/\\([a-zA-Z]\\)/ \\1/\" -e \"s/^/|/\"" % (root_package)
+cmd = "eups list -D %s | sed -e \"s/| /||/g\" -e \"s/\\([a-zA-Z]\\)/ \\1/\" -e \"s/^/|/\" -e \"s/\\[.* //\" -e \"s/\\]//\"" % (root_package)
 
 try:
     f = os.popen(cmd)
@@ -73,20 +73,15 @@ while ForwardProcessing :
         ForwardProcessing = False
 
 
-# Skip First in list, process all the level 2 dependencies
-for fwdIndex in range(1,levelsSize):
-    if levels[fwdIndex] == 0:
+# Process last nest
+for bkwdIndex in range(levelsSize-1,-1,-1):
+    if levels[bkwdIndex] == 0:
         continue
     else: 
         # setup packages[fwdIndex] versions[fwdIndex]
-        print "%s %s" % (packages[fwdIndex], versions[fwdIndex])
-        fromIndex.append(fwdIndex)
-        levels[fwdIndex] = 0
-
-
-# Now process the main package
-print "%s %s" % (packages[0], versions[0])
-fromIndex.append(0)
+        print "%s %s" % (packages[bkwdIndex], versions[bkwdIndex])
+        fromIndex.append(bkwdIndex)
+        levels[bkwdIndex] = 0
 
 #print "Final dependency levels"
 #for i in range(levelsSize):
