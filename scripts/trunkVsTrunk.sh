@@ -29,70 +29,23 @@ SCRIPT_PATH="/home/buildbot/scripts"
 # ---------------
 # -- Functions --
 # ---------------
-# -- setup package's svn directory in preparation for the build --
-prepareSvnDir() {
-
-    # ------------------------------------------------------------
-    # -- NOTE:  all variables in this function are global!  NOTE--
-    # ------------------------------------------------------------
-
-    if [ "$1" = "" ]; then
-        print "No package name for svn extraction. See LSST buildbot developer."
-        exit 1
-    fi
-
-    adjustBadEupsName $1
-    CUR_PACKAGE="$RETVAL"
-
-    # package is internal and should be built from trunk
-    lookup_svn_trunk_revision $CUR_PACKAGE
-    PLAIN_VERSION="$RET_REVISION"
-    RET_REVISION="svn$RET_REVISION"
-    SVN_URL=$RET_SVN_URL
-    REVISION=$RET_REVISION
-
-    print "Internal package: $CUR_PACKAGE will be built from trunk version: $PLAIN_VERSION"
-    
-    mkdir -p svn
-    SVN_LOCAL_DIR=svn/${CUR_PACKAGE}_$PLAIN_VERSION
-    
-    # if force, remove existing package
-    if [ "$FORCE" -a -d $SVN_LOCAL_DIR ]; then
-        lookup_svn_revision $SVN_LOCAL_DIR
-        print "Remove existing $CUR_PACKAGE $REVISION"
-        if [ `eups list $CUR_PACKAGE $REVISION | grep Setup | wc -l` = 1 ]; then
-            unsetup -j $CUR_PACKAGE $REVISION
-        fi
-        pretty_execute "eups remove -N $CUR_PACKAGE $REVISION"
-        # remove svn dir, to force re-checkout
-        pretty_execute "rm -rf $SVN_LOCAL_DIR"
-    fi
-    
-    if [ ! -d $SVN_LOCAL_DIR ]; then
-        step "Check out $CUR_PACKAGE $REVISION from $SVN_URL"
-        SVN_COMMAND="svn checkout $SVN_URL $SVN_LOCAL_DIR "
-    else
-        step "Update $CUR_PACKAGE $REVISION from svn"
-        SVN_COMMAND="svn update $SVN_LOCAL_DIR "
-    fi
-    verbose_execute $SVN_COMMAND
-    return $RETVAL
-}
-
-
 # -- Alter eups name not corresponding to directory path convention --
+# $1 = eups package name
+# return ADJUSTED_NAME in LSST standard so its svn directory name is derived OK
 adjustBadEupsName() {
-    #First a little adjustment of bad package naming:  
+    #  A little adjustment of bad package naming:  
     #  at the moment, only one:  mops -> mops_nightmops
     if [ "$1" = "mops" ]; then
-        RETVAL="mops_nightmops"
+        ADJUSTED_NAME="mops_nightmops"
     else
-        RETVAL="$1"
+        ADJUSTED_NAME="$1"
     fi
 }
 
 
 # -- Some LSST internal packages should never be built from trunk --
+# $1 = eups package name
+# return 0 if a special LSST package which should be considered external
 package_is_special() {
     if [ "$1" = "" ]; then
         print "No package name provided for internal specialness check. See LSST buildbot developer."
@@ -108,12 +61,69 @@ package_is_special() {
         -o $SPCL_PACKAGE = "isrdata"  \
         -o $SPCL_PACKAGE = "auton"  \
         -o $SPCL_PACKAGE = "ssd"  \
+        -o $SPCL_PACKAGE = "base"  \
         -o ${SPCL_PACKAGE:0:4} = "lsst" ]; then 
         return 0
     else
         return 1
     fi
 }
+# -- setup package's svn directory in preparation for the build --
+# $1 = adjusted eups package name
+# return:  0, if svn checkout/update occured withuot error; 1, otherwise.
+# RET_REVISION
+# SVN_URL
+# REVISION 
+# SVN_LOCAL_DIR
+
+prepareSvnDir() {
+
+    # ------------------------------------------------------------
+    # -- NOTE:  most variables in this function are global!  NOTE--
+    # ------------------------------------------------------------
+
+    if [ "$1" = "" ]; then
+        print "No package name for svn extraction. See LSST buildbot developer."
+        exit 1
+    fi
+
+    local SVN_PACKAGE=$1 
+
+    # package is internal and should be built from trunk
+    lookup_svn_trunk_revision $SVN_PACKAGE
+    local PLAIN_VERSION="$RET_REVISION"
+    RET_REVISION="svn$RET_REVISION"
+    SVN_URL=$RET_SVN_URL
+    REVISION=$RET_REVISION
+
+    print "Internal package: $SVN_PACKAGE will be built from trunk version: $PLAIN_VERSION"
+    
+    mkdir -p svn
+    SVN_LOCAL_DIR="svn/${SVN_PACKAGE}_${PLAIN_VERSION}"
+    
+    # if force, remove existing package
+    if [ "$FORCE" -a -d $SVN_LOCAL_DIR ]; then
+        lookup_svn_revision $SVN_LOCAL_DIR
+        print "Remove existing $SVN_PACKAGE $REVISION"
+        if [ `eups list $SVN_PACKAGE $REVISION | grep Setup | wc -l` = 1 ]; then
+            unsetup -j $SVN_PACKAGE $REVISION
+        fi
+        pretty_execute "eups remove -N $SVN_PACKAGE $REVISION"
+        # remove svn dir, to force re-checkout
+        pretty_execute "rm -rf $SVN_LOCAL_DIR"
+    fi
+    
+    if [ ! -d $SVN_LOCAL_DIR ]; then
+        step "Check out $SVN_PACKAGE $REVISION from $SVN_URL"
+        local SVN_COMMAND="svn checkout $SVN_URL $SVN_LOCAL_DIR "
+    else
+        step "Update $SVN_PACKAGE $REVISION from svn"
+        local SVN_COMMAND="svn update $SVN_LOCAL_DIR "
+    fi
+    verbose_execute $SVN_COMMAND
+}
+
+
 
 # -------------------
 # -- get arguments --
@@ -172,12 +182,11 @@ if [ $? = 0 ]; then
 fi
 
 adjustBadEupsName $PACKAGE
-PACKAGE=$RETVAL
+PACKAGE=$ADJUSTED_NAME
 
-# -- function modifies/sets global variables --
 prepareSvnDir $PACKAGE
-if [ $? = 1 ]; then
-    print "svn checkout or update failed; contact the LSST buildbot developer"
+if [ $RETVAL != 0 ]; then
+    print "$PACKAGE svn checkout or update failed; contact the LSST buildbot developer"
     exit 1
 fi
 
@@ -187,47 +196,54 @@ pretty_execute "setup -j $PACKAGE $FULL_PATH_TO_SVN_LOCAL_DIR"
 
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-step "Sequence the Dependency Chain"
+step "Sequence $PACKAGE Dependency Chain"
 
-TMP_FILE=`mktemp /tmp/buildbot_tVt.XXXXXXXXXX`
+#TMP_FILE=`mktemp /tmp/buildbot_tVt.XXXXXXXXXX`
+TMP_FILE="$WORK_PWD/buildbot_tVt_temp"
+`cp /dev/null $TMP_FILE`
 if [ $? != 0 ]; then
    print "Unable to create temporary file for dependency sequencing."
    print "Test of $PACKAGE failed before it started."
    exit 1
 fi
+python ${0%/*}/orderDependents.py $PACKAGE > $TMP_FILE
 
-CUR_COUNT=0
-python $SCRIPT_PATH/orderDependents.py $PACKAGE > $TMP_FILE
-
+COUNT=0
 while read LINE; 
 do
-    print "   $CUR_COUNT  $LINE"
-    (( CUR_COUNT++ ))
+    print "   $COUNT  $LINE"
+    (( COUNT++ ))
 done < $TMP_FILE
 
 
-
-CUR_COUNT=0
-while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS
-do
+while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     cd $WORK_PWD
     #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    step "Install dependency: $CUR_PACKAGE for $PACKAGE build"
+    step "Install dependency $CUR_PACKAGE for $PACKAGE build"
 
     # -- Process external or special-case packages  via lsstpkg --
     package_is_external ${CUR_PACKAGE}
     if [ $? = 0 ]; then
         print "Installing external package: $CUR_PACKAGE $CUR_VERSION"
-
-        if [ `eups list $CUR_PACKAGE $CUR_VERSION | wc -l` = 0 ]; then
-            INSTALL_CMD="lsstpkg install $CUR_PACKAGE $CUR_VERSION"
-            pretty_execute $INSTALL_CMD
-            if [ $RETVAL != 0 ]; then
-                print "Failed to install $CUR_PACKAGE $CUR_VERSION with lsstpkg."
-                exit 1
-            else
-                print "Dependency: $CUR_PACKAGE, successfully installed."
+        if [ $CUR_VERSION != "Current" ]; then
+            if [ `eups list $CUR_PACKAGE $CUR_VERSION | wc -l` = 0 ]; then
+                INSTALL_CMD="lsstpkg install $CUR_PACKAGE $CUR_VERSION"
+                pretty_execute $INSTALL_CMD
+                if [ $RETVAL != 0 ]; then
+                    print "Failed to install $CUR_PACKAGE $CUR_VERSION with lsstpkg."
+                    exit 1
+                else
+                    print "Dependency: $CUR_PACKAGE, successfully installed."
+                fi
             fi
+        else
+            # if dependency needs just needs 'current', go with it
+            if [ `eups list $CUR_PACKAGE | wc -l` = 0 ]; then
+                print "Failed to setup dependency: $CUR_PACKAGE."
+                print "An 'lsstpkg install' version was not provided."
+                exit 1
+            fi
+            CUR_VERSION=""
         fi
         pretty_execute "setup -j $CUR_PACKAGE $CUR_VERSION"
         if [ $RETVAL != 0 ]; then
@@ -256,9 +272,11 @@ do
     # -- Prepare SVN directory for build --
     # -----------------------------------
 
-    # -- function modifies/sets global variables --
+    adjustBadEupsName $CUR_PACKAGE
+    CUR_PACKAGE=$ADJUSTED_NAME
+
     prepareSvnDir $CUR_PACKAGE
-    if [ $? != 0 ]; then
+    if [ $RETVAL != 0 ]; then
         print "svn checkout or update failed; is $CUR_PACKAGE $REVISION a valid version?"
         exit 1
     fi
@@ -275,7 +293,8 @@ do
     # ----------------------------------------------------------------
     cd $SVN_LOCAL_DIR 
     
-    pretty_execute "eups list -s # Setup for package build"
+    GOOD_BUILD="0"
+    pretty_execute "eups list -s"
     #pretty_execute "eups list $CUR_PACKAGE"
     
     #RAA#debug "Clean up previous build attempt in directory"
@@ -284,28 +303,10 @@ do
     pretty_execute "scons opt=3 install $SCONS_TESTS"
     if [ $RETVAL != 0 ]; then
         print "Install/test failed: $CUR_PACKAGE $REVISION"
-        FAILED_INSTALL=true
+        GOOD_BUILD="1"
     fi
-    
-    # preserve logs
-    LOG_FILE="config.log"
-    pretty_execute pwd
-    if [ "$LOG_DEST" -a "(" "$FAILED_INSTALL" -o "$LOG_SUCCESS" ")" ]; then
-        if [ -f "$LOG_FILE" ]; then
-            copy_log ${CUR_PACKAGE}_$REVISION/$LOG_FILE $LOG_FILE $LOG_DEST_HOST $LOG_DEST_DIR ${CUR_PACKAGE}/$REVISION $LOG_URL
-        else
-            print "No $LOG_FILE present."
-        fi
-    else
-        if [ -f "$LOG_FILE" ]; then
-            print "Not preserving config.log."
-        else
-            print "No config.log generated."
-        fi
-    fi
-    
-    
-    if [  ! $FAILED_INSTALL ]; then
+
+    if [ "$GOOD_BUILD" = "0" ]; then
         # ----------------------------
         # -- check for failed tests --
         # ----------------------------
@@ -319,7 +320,7 @@ do
                 for FAILED_FILE in `find tests -name "*.failed"`; do
                     pretty_execute "cat $FAILED_FILE"
                 done
-                FAILED_INSTALL=true
+                GOOD_BUILD="1"
             else
                 print "All tests succeeded in $CUR_PACKAGE"
             fi
@@ -328,10 +329,26 @@ do
         fi
     fi
     
-    if [ $FAILED_INSTALL ]; then
-        # -----------------------------------------------------------------------
-        # -- return to primary work directory so can 'rm' the source directory --
-        # -----------------------------------------------------------------------
+    if [ "$GOOD_BUILD" = "1" ]; then
+        # preserve config log for failure info
+        LOG_FILE="config.log"
+        pretty_execute pwd
+        if [ "$LOG_DEST" -a "(" "$GOOD_BUILD" = "1" -o "$LOG_SUCCESS" ")" ]; then
+            if [ -f "$LOG_FILE" ]; then
+                copy_log ${CUR_PACKAGE}_$REVISION/$LOG_FILE $LOG_FILE $LOG_DEST_HOST $LOG_DEST_DIR ${CUR_PACKAGE}/$REVISION $LOG_URL
+            else
+                print "No $LOG_FILE present."
+            fi
+        else
+            if [ -f "$LOG_FILE" ]; then
+                print "Not preserving config.log."
+            else
+                print "No config.log generated."
+            fi
+        fi
+
+        # -- return to primary work directory  --
+        # --               later, possibly 'rm' source directory --
         cd $WORK_PWD
 
         print "Installation of $CUR_PACKAGE $REVISION failed."
@@ -342,11 +359,8 @@ do
     # -------------------------------------------------
     # -- Loop around to next entry in dependency list --
     # -------------------------------------------------
-    (( CUR_COUNT++ ))
 
-done < $TMP_FILE
-rm $TMP_FILE
-
+done < "$TMP_FILE"
 
 print "Successfully built trunk-vs-trunk version of $PACKAGE"
 exit 0

@@ -34,8 +34,8 @@ fetch_package_owners() {
 	print "*** Expected \"package $1: owner@somewhere.edu, owner@gmail.com\""
 	print "*** Sending notification to $recipients instead.\""
     fi
-    PACKAGE_OWNERS=$recipients
-    # PACKAGE_OWNERS="rallsman@lsst.org" # for debugging
+    #RAA#PACKAGE_OWNERS=$recipients
+    PACKAGE_OWNERS="rallsman@lsst.org" # for debugging
 }
 
 # test "pick_newest_version" with something like this:
@@ -251,7 +251,7 @@ pretty_execute() {
     local tmp_err="${tmp_prefix}_stderr.tmp"
     if [ "$anon" = "" ]; then print $@; fi
     if [ -f $tmp_cmd -o -f $tmp_out -o -f $tmp_err ]; then
-	print "*** Unable to pretty-print: $tmp_cmd, $tmp_out, or $tmp_err exists. ***"
+	#print "*** Unable to pretty-print: $tmp_cmd, $tmp_out, or $tmp_err exists. ***"
 	$@
 	RETVAL=$?
     else
