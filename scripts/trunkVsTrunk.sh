@@ -16,6 +16,7 @@ usage() {
     echo "                    for example \"buildbot@master:/var/www/html/logs\""
     echo "    -log_url <url>: URL prefix for the log destination,"
     echo "                    for example \"http://master/logs/\""
+    echo "         -no_tests: only build package, don't run tests"
 }
 source /lsst/stacks/default/loadLSST.sh
 source ${0%/*}/build_functions.sh
@@ -24,7 +25,6 @@ DEBUG=debug
 DEV_SERVER="lsstdev.ncsa.uiuc.edu"
 SVN_SERVER="svn.lsstcorp.org"
 WEB_ROOT="/var/www/html/doxygen"
-SCRIPT_PATH="/home/buildbot/scripts"
 
 # ---------------
 # -- Functions --
@@ -160,6 +160,14 @@ if [ "$1" = "-log_url" ]; then
     LOG_URL=$2
     shift 2
 fi
+
+if [ "$1" = "-no_tests" ]; then
+    DO_TESTS=1
+    shift 1
+else
+    DO_TESTS=0
+fi
+
 PACKAGE=$1
 
 WORK_PWD=`pwd`
@@ -299,17 +307,23 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     
     #RAA#debug "Clean up previous build attempt in directory"
     #RAA#quiet_execute scons -c
-    scons_tests $CUR_PACKAGE
+    if [ $DO_TESTS = 0 ] ; then
+        scons_tests $CUR_PACKAGE
+    else
+        SCONS_TESTS=""
+    fi
     pretty_execute "scons opt=3 install $SCONS_TESTS"
     if [ $RETVAL != 0 ]; then
         print "Install/test failed: $CUR_PACKAGE $REVISION"
-        GOOD_BUILD="1"
+        GOOD_BUILD=1
     fi
 
-    if [ "$GOOD_BUILD" = "0" ]; then
+    print " Good_build:$GOOD_BUILD:  do_tests:$DO_TESTS"
+    if [ $GOOD_BUILD = 0 -a $DO_TESTS = 0 ]; then
         # ----------------------------
         # -- check for failed tests --
         # ----------------------------
+        
         step "Checking for failed tests"
         if [ -d tests ]; then
             FAILED_COUNT=`find tests -name "*.failed" | wc -l`
@@ -329,7 +343,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         fi
     fi
     
-    if [ "$GOOD_BUILD" = "1" ]; then
+    if [ $GOOD_BUILD = 1 ]; then
         # preserve config log for failure info
         LOG_FILE="config.log"
         pretty_execute pwd
@@ -362,5 +376,9 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
 
 done < "$TMP_FILE"
 
-print "Successfully built trunk-vs-trunk version of $PACKAGE"
+if [ $DO_TESTS = 0 ]; then
+    print "Successfully built and tested trunk-vs-trunk version of $PACKAGE"
+else
+    print "Successfully built (but not tested) trunk-vs-trunk version of $PACKAGE"
+fi
 exit 0
