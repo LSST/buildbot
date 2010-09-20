@@ -3,19 +3,6 @@
 # ensure that its minimal dependencies are installed likewise
 
 
-#***********************************************************************
-#        T B D    T B D   T B D   T B D   T B D   T B D
-# In order to get an accurate dependency able, ALL trunk svn directories
-# must be extracted and 'setup -j LOCAL:<name>'  so that eups can deduce
-# the dependencies from the source tree.  Only then should the build
-# of the dependencies commence in the order specified.
-#
-# The current version will not pick up a new dependency listed in the
-# trunk version of one of the  dependent 'eups declared' packages.
-#        T B D    T B D   T B D   T B D   T B D   T B D
-#***********************************************************************
-
-
 usage() {
 #80 cols  ................................................................................
     echo "Usage: $0 [options] package"
@@ -32,7 +19,11 @@ usage() {
     echo "                    for example \"http://master/logs/\""
     echo "         -no_tests: only build package, don't run tests"
 }
-source /lsst/stacks/default/loadLSST.sh
+# For VM systems
+#source /lsst/stacks/default/loadLSST.sh
+# For lsst cluster
+source /lsst/DC3/stacks/default/loadLSST.sh
+
 source ${0%/*}/build_functions.sh
 
 DEBUG=debug
@@ -41,8 +32,12 @@ SVN_SERVER="svn.lsstcorp.org"
 WEB_ROOT="/var/www/html/doxygen"
 
 #Exclude known persistent test failures until they are fixed or removed
-#    sdqa/tests/testSdqaRatingFormatter.py 
-SKIP_THESE_TESTS="| grep -v testSdqaRatingFormatter.py "
+#   Code Developer should install into tests/SConscript:
+#       ignoreList=["testSdqaRatingFormatter.py"]
+#       tests = lsst.tests.Control(env, ignoreList=ignoreList, verbose=True)
+# If not use e.g.    SKIP_THESE_TESTS="| grep -v testSdqaRatingFormatter.py "
+SKIP_THESE_TESTS=""
+
 
 # ---------------
 # -- Functions --
@@ -110,7 +105,7 @@ prepareSvnDir() {
     # package is internal and should be built from trunk
     lookup_svn_trunk_revision $SVN_PACKAGE
     local PLAIN_VERSION="$RET_REVISION"
-    RET_REVISION="svn$RET_REVISION"
+    RET_REVISION="svn_$RET_REVISION"
     SVN_URL=$RET_SVN_URL
     REVISION=$RET_REVISION
 
@@ -217,47 +212,96 @@ if [ $RETVAL != 0 ]; then
 fi
 
 #***********************************************************************
-#        T B D    T B D   T B D   T B D   T B D   T B D
-# In order to get an accurate dependency able, ALL trunk svn directories
-# must be extracted and 'setup -j LOCAL:<name>'  so that eups can deduce
+# In order to get an accurate dependency table, ALL trunk svn directories
+# must be extracted and 'setup -j <name>'  so that eups can deduce
 # the dependencies from the source tree.  Only then should the build
 # of the dependencies commence in the order specified.
-#
-# The current code segment below will not pick up a new dependency listed 
-# in the trunk version of one of the  dependent 'eups declared' packages.
-#        T B D    T B D   T B D   T B D   T B D   T B D
 #***********************************************************************
 
-# -- setup primary package in prep for dependency list generation
-FULL_PATH_TO_SVN_LOCAL_DIR="LOCAL:$WORK_PWD/$SVN_LOCAL_DIR"
-pretty_execute "setup -j $PACKAGE $FULL_PATH_TO_SVN_LOCAL_DIR"
+# -- setup root package in prep for dependency list generation
+quiet_execute eups declare -r $WORK_PWD/$SVN_LOCAL_DIR $PACKAGE $REVISION
+pretty_execute "setup -j $PACKAGE $REVISION"
 
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-step "Sequence $PACKAGE Dependency Chain"
+step " Bootstrap $PACKAGE Dependency Chain"
 
-#TMP_FILE=`mktemp /tmp/buildbot_tVt.XXXXXXXXXX`
-TMP_FILE="$WORK_PWD/buildbot_tVt_temp"
-`cp /dev/null $TMP_FILE`
+#BOOT_DEPS=`mktemp /tmp/buildbot_tVt.XXXXXXXXXX`
+BOOT_DEPS="$WORK_PWD/buildbot_tVt_bootstrap"
+`cp /dev/null $BOOT_DEPS`
 if [ $? != 0 ]; then
    print "Unable to create temporary file for dependency sequencing."
    print "Test of $PACKAGE failed before it started."
    exit 1
 fi
-python ${0%/*}/orderDependents.py $PACKAGE > $TMP_FILE
+python ${0%/*}/orderDependents.py $PACKAGE > $BOOT_DEPS
 
 COUNT=0
 while read LINE; 
 do
     print "   $COUNT  $LINE"
     (( COUNT++ ))
-done < $TMP_FILE
+done < $BOOT_DEPS
+
+step "Bootstrap $PACKAGE dependency tree"
+while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
+    cd $WORK_PWD
+    #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # setup only the DM svn-able packages so correct dependency tree is created
+    package_is_external ${CUR_PACKAGE}
+    if [ $? = 0 ]; then 
+        continue; 
+    fi
+    package_is_special $CUR_PACKAGE
+    if [ $? = 0 ] ; then 
+        continue; 
+    fi
+
+    # -----------------------------------
+    # -- Prepare SVN directory for build --
+    # -----------------------------------
+
+    adjustBadEupsName $CUR_PACKAGE
+    CUR_PACKAGE=$ADJUSTED_NAME
+
+    prepareSvnDir $CUR_PACKAGE
+    if [ $RETVAL != 0 ]; then
+        print "svn checkout or update failed; is $CUR_PACKAGE $REVISION a valid version?"
+        exit 1
+    fi
+
+    # -------------------------------
+    # -- setup for a package build --
+    # -------------------------------
+    quiet_execute eups declare -r $WORK_PWD/$SVN_LOCAL_DIR $CUR_PACKAGE $REVISION
+    quiet_execute "setup -j $CUR_PACKAGE $REVISION"
+    
+# -- Loop around to next entry in bootstrap dependency list --
+done < "$BOOT_DEPS"
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+step "Generate accurate dependency tree for $PACKAGE build"
+REAL_DEPS="$WORK_PWD/buildbot_tVt_real"
+`cp /dev/null $REAL_DEPS`
+if [ $? != 0 ]; then
+   print "Unable to create temporary file for dependency sequencing."
+   print "Test of $PACKAGE failed before it started."
+   exit 1
+fi
+python ${0%/*}/orderDependents.py -s $PACKAGE > $REAL_DEPS
+
+COUNT=0
+while read LINE; 
+do
+    print "   $COUNT  $LINE"
+    (( COUNT++ ))
+done < $REAL_DEPS
 
 
 while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     cd $WORK_PWD
     #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    step "Install dependency $CUR_PACKAGE for $PACKAGE build"
+    step "Install dependency $CUR_PACKAGE"
 
     # -- Process external or special-case packages  via lsstpkg --
     package_is_external ${CUR_PACKAGE}
@@ -322,9 +366,8 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     # -------------------------------
     # -- setup for a package build --
     # -------------------------------
-    
-    FULL_PATH_TO_SVN_LOCAL_DIR="LOCAL:$WORK_PWD/$SVN_LOCAL_DIR"
-    pretty_execute "setup -j $CUR_PACKAGE $FULL_PATH_TO_SVN_LOCAL_DIR"
+    quiet_execute eups declare -r $WORK_PWD/$SVN_LOCAL_DIR $CUR_PACKAGE $REVISION
+    pretty_execute "setup -j $CUR_PACKAGE $REVISION"
     
     # ----------------------------------------------------------------
     # -- Rest of work is done within the package's source directory --
@@ -405,7 +448,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     # -- Loop around to next entry in dependency list --
     # -------------------------------------------------
 
-done < "$TMP_FILE"
+done < "$REAL_DEPS"
 
 if [ $DO_TESTS = 0 ]; then
     print "Successfully built and tested trunk-vs-trunk version of $PACKAGE"
