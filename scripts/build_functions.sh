@@ -90,14 +90,20 @@ svn_url() {
     else
 	svn_server_dir $1
 
+        local host_name=`uname -n`
+        if [ $host_name = "lsst6.ncsa.uiuc.edu" ]; then
+            SVN_ACCESS="svn:"
+        else
+            SVN_ACCESS="svn+ssh:"
+        fi
 	if [ $2 = "trunk" -o "${VERSION:0:3}" = "svn" ]; then # trunk version: get from SVN trunk
-	    RET_SVN_URL=svn+ssh://$SVN_SERVER/DMS/$RET_SVN_SERVER_DIR/trunk
+	    RET_SVN_URL=$SVN_ACCESS//$SVN_SERVER/DMS/$RET_SVN_SERVER_DIR/trunk
 	    if [ "$VERSION" != "trunk" ]; then
 		RET_REVISION=${VERSION:3}
 		RET_SVN_ADDL_ARGS="-r$REVISION"
 	    fi
 	else # tagged version: get from tagged branch
-	    RET_SVN_URL=svn+ssh://$SVN_SERVER/DMS/$RET_SVN_SERVER_DIR/tags/$2
+	    RET_SVN_URL=$SVN_ACCESS//$SVN_SERVER/DMS/$RET_SVN_SERVER_DIR/tags/$2
 	fi
 
 	return 0

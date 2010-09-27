@@ -19,6 +19,10 @@ usage() {
     echo "                    for example \"http://master/logs/\""
     echo "         -no_tests: only build package, don't run tests"
 }
+
+# Only buildbot's local dierctory is writable on lsst cluster...
+export LSST_DEVEL=/home/buildbot/buildbotSandbox
+
 # For VM systems
 #source /lsst/stacks/default/loadLSST.sh
 # For lsst cluster
@@ -219,8 +223,9 @@ fi
 #***********************************************************************
 
 # -- setup root package in prep for dependency list generation
-quiet_execute eups declare -r $WORK_PWD/$SVN_LOCAL_DIR $PACKAGE $REVISION
+pretty_execute "eups declare -r $WORK_PWD/$SVN_LOCAL_DIR $PACKAGE $REVISION"
 pretty_execute "setup -j $PACKAGE $REVISION"
+eups list $PACKAGE $REVISION
 
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -273,8 +278,9 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     # -------------------------------
     # -- setup for a package build --
     # -------------------------------
-    quiet_execute eups declare -r $WORK_PWD/$SVN_LOCAL_DIR $CUR_PACKAGE $REVISION
-    quiet_execute "setup -j $CUR_PACKAGE $REVISION"
+    pretty_execute "eups declare -r $WORK_PWD/$SVN_LOCAL_DIR $CUR_PACKAGE $REVISION"
+    pretty_execute "setup -j $CUR_PACKAGE $REVISION"
+    eups list $CUR_PACKAGE $REVISION
     
 # -- Loop around to next entry in bootstrap dependency list --
 done < "$BOOT_DEPS"
@@ -353,7 +359,6 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     # -----------------------------------
     # -- Prepare SVN directory for build --
     # -----------------------------------
-
     adjustBadEupsName $CUR_PACKAGE
     CUR_PACKAGE=$ADJUSTED_NAME
 
@@ -363,20 +368,20 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         exit 1
     fi
 
-    # -------------------------------
-    # -- setup for a package build --
-    # -------------------------------
-    quiet_execute eups declare -r $WORK_PWD/$SVN_LOCAL_DIR $CUR_PACKAGE $REVISION
-    pretty_execute "setup -j $CUR_PACKAGE $REVISION"
-    
     # ----------------------------------------------------------------
     # -- Rest of work is done within the package's source directory --
     # ----------------------------------------------------------------
     cd $SVN_LOCAL_DIR 
+
+    # -------------------------------
+    # -- setup for a package build --
+    # -------------------------------
+    pretty_execute "eups declare -r $WORK_PWD/$SVN_LOCAL_DIR $CUR_PACKAGE $REVISION"
+    pretty_execute "setup -r . -k "
+    pretty_execute "setup -j $CUR_PACKAGE $REVISION"
+    pretty_execute "eups list -s"
     
     GOOD_BUILD="0"
-    pretty_execute "eups list -s"
-    #pretty_execute "eups list $CUR_PACKAGE"
     
     #RAA#debug "Clean up previous build attempt in directory"
     #RAA#quiet_execute scons -c
