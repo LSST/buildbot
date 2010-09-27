@@ -20,7 +20,7 @@ usage() {
     echo "         -no_tests: only build package, don't run tests"
 }
 
-# Only buildbot's local dierctory is writable on lsst cluster...
+# Only buildbot's local directory is writable on lsst cluster...
 export LSST_DEVEL=/home/buildbot/buildbotSandbox
 
 # For VM systems

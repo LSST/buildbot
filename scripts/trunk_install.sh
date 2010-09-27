@@ -28,6 +28,7 @@ usage() {
 source /lsst/stacks/default/loadLSST.sh
 source ${0%/*}/build_functions.sh
 
+
 DEV_SERVER="lsstdev.ncsa.uiuc.edu"
 SVN_SERVER="svn.lsstcorp.org"
 WEB_ROOT="/var/www/html/doxygen"
@@ -87,6 +88,15 @@ RAW_PACKAGE=$PACKAGE # without devenv_ stripped off the front
 CHAIN=$INCOMING_CHAIN:$PACKAGE
 
 TABLE_FILE_PREFIX=$PACKAGE
+
+#----------------------------------------------------------------------
+#----------------------------------------------------------------------
+#RAA   F I X   F I X   when LSSTPipe subversion is updated to 1.6+     F I X
+# Prefer to use system resident svn 1.6+ instead of LSSTPipe svn 1.5
+pretty_execute unsetup subversion
+#----------------------------------------------------------------------
+#----------------------------------------------------------------------
+
 
 # -------------------
 # -- special cases -- la la la I can't hear you
@@ -198,7 +208,9 @@ else
     step "Update $PACKAGE $VERSION from svn"
     SVN_COMMAND="svn update $SVN_LOCAL_DIR $SVN_ADDL_ARGS"
 fi
-verbose_execute $SVN_COMMAND
+print "Extracting source: $SVN_COMMAND"
+pwd
+pretty_execute "$SVN_COMMAND"
 if [ $RETVAL != 0 ]; then
     print "svn checkout or update failed; is $PACKAGE $VERSION a valid version?"
     exit 1

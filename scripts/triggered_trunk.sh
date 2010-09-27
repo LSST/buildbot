@@ -94,7 +94,7 @@ while [ $1 ]; do
 	fi
     else # initial checkout -- should be rare
 	unset OLD_REVISION
-	SVN_URL=svn+ssh://$SVN_SERVER/DMS/$SVN_SERVER_DIR/trunk
+	SVN_URL=svn://$SVN_SERVER/DMS/$SVN_SERVER_DIR/trunk
 #	print "$SVN_LOCAL_DIR doesn't exist; checking out from $SVN_URL"
 #	SVN_CMD="svn checkout $SVN_URL $SVN_LOCAL_DIR 2>&1 | tail -5"
 	SVN_CMD="svn checkout $SVN_URL $SVN_LOCAL_DIR | tail -5"
@@ -156,6 +156,11 @@ while [ $1 ]; do
 		else
 		    EMAIL_RECIPIENT=$PACKAGE_OWNERS
 		fi
+                #RAA#  F I X   F I X   F I X   when treachea working agin #RAA#
+                #if [ "$AGAINST_CURRENT" != "-against_current" ]; then
+                    EMAIL_RECIPIENT="robyn@noao.edu"
+                #fi
+                #RAA#  F I X   F I X   F I X   when treachea working agin #RAA#
 		print "Sending build failure notification to $EMAIL_RECIPIENT"
 		EMAIL_SUBJECT="LSST automated build failure: $PACKAGE trunk in $BUILDER_NAME"
 

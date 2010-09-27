@@ -90,12 +90,7 @@ svn_url() {
     else
 	svn_server_dir $1
 
-        local host_name=`uname -n`
-        if [ $host_name = "lsst6.ncsa.uiuc.edu" ]; then
-            SVN_ACCESS="svn:"
-        else
-            SVN_ACCESS="svn+ssh:"
-        fi
+        SVN_ACCESS="svn:"
 	if [ $2 = "trunk" -o "${VERSION:0:3}" = "svn" ]; then # trunk version: get from SVN trunk
 	    RET_SVN_URL=$SVN_ACCESS//$SVN_SERVER/DMS/$RET_SVN_SERVER_DIR/trunk
 	    if [ "$VERSION" != "trunk" ]; then
