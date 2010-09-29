@@ -34,8 +34,8 @@ fetch_package_owners() {
 	print "*** Expected \"package $1: owner@somewhere.edu, owner@gmail.com\""
 	print "*** Sending notification to $recipients instead.\""
     fi
-    #RAA#PACKAGE_OWNERS=$recipients
-    PACKAGE_OWNERS="rallsman@lsst.org" # for debugging
+    PACKAGE_OWNERS=$recipients
+    #PACKAGE_OWNERS="rallsman@lsst.org" # for debugging
 }
 
 # test "pick_newest_version" with something like this:

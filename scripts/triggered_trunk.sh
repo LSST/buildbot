@@ -156,17 +156,12 @@ while [ $1 ]; do
 		else
 		    EMAIL_RECIPIENT=$PACKAGE_OWNERS
 		fi
-                #RAA#  F I X   F I X   F I X   when treachea working agin #RAA#
-                #if [ "$AGAINST_CURRENT" != "-against_current" ]; then
-                    EMAIL_RECIPIENT="robyn@noao.edu"
-                #fi
-                #RAA#  F I X   F I X   F I X   when treachea working agin #RAA#
 		print "Sending build failure notification to $EMAIL_RECIPIENT"
 		EMAIL_SUBJECT="LSST automated build failure: $PACKAGE trunk in $BUILDER_NAME"
 
 		rm -f email_body.txt
 		printf "\
-from: \"Buildbot\" <bbaker@ncsa.illinois.edu>\n\
+from: \"Buildbot\" <robyn@lsst.org>\n\
 subject: $EMAIL_SUBJECT\n\
 to: $EMAIL_RECIPIENT\n\
 cc: \"Bill Baker\" <bbaker@ncsa.illinois.edu>, \"Robyn Allsman\" <robyn@lsst.org>\n\n" >> email_body.txt
