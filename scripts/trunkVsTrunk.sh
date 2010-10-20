@@ -78,8 +78,9 @@ package_is_special() {
         -o $SPCL_PACKAGE = "isrdata"  \
         -o $SPCL_PACKAGE = "auton"  \
         -o $SPCL_PACKAGE = "ssd"  \
-        -o $SPCL_PACKAGE = "base"  \
         -o ${SPCL_PACKAGE:0:4} = "lsst" ]; then 
+        -o $SPCL_PACKAGE = "mfpr"  \
+        -o $SPCL_PACKAGE = "base"  \
         return 0
     else
         return 1
