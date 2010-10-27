@@ -3,7 +3,7 @@
 
 if [[ $1 == "" ]]
 then
-    echo "usage: $0 [-lsstdir dir] [-no_doxygen] [-C] package [packages to check]"
+    echo "usage: $0 [-lsstdir dir] [-no_doxygen] [--tag=current] package [packages to check]"
     exit 1
 fi
 
@@ -32,7 +32,7 @@ if [ "$1" = "-no_doxygen" ]; then
     shift
 fi
 
-if [ "$1" = "-C" ]; then
+if [ "$1" = "--tag=current" ]; then
     EXTRA_ARGS=$1;
     shift
 fi
