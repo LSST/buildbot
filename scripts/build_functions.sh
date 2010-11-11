@@ -1,3 +1,9 @@
+#==============================================================
+# Set a global used for error messages to the buildbot guru
+#==============================================================
+BUCK_STOPS_HERE="rallsman@lsst.org"
+
+
 # set $RET_CURRENT_VERSION to current version of $1, from current.list
 lookup_current_version() {
     fetch_current_line $@
@@ -20,22 +26,15 @@ scons_tests() {
 PACKAGE_OWNERS_URL="http://dev.lsstcorp.org/trac/wiki/PackageOwners"
 fetch_package_owners() {
     local url="$PACKAGE_OWNERS_URL?format=txt"
-    local line=`curl -s $url | grep "package $1"`
-    if [ "$line" ]; then
-	local recipients=${line##package $1:}
-	if [ ! "$recipients" ]; then
-	    print "*** Error: could not extract owner(s) of $1 from $url"
-	    print "***        found line \"$line\""
-	fi
+    unset RECIPIENTS
+    RECIPIENTS=`curl -s $url | grep "package $1" | sed -e "s/package $1://" -e "s/ from /@/g"`
+    if [ ! "$RECIPIENTS" ]; then
+	RECIPIENTS=$BUCK_STOPS_HERE
+	print "*** Error: could not extract owner(s) of $1 from $url"
+	print "*** Expected \"package $1: owner from somewhere.edu, owner from gmail.com\""
+	print "*** Sending notification to $RECIPIENTS instead.\""
     fi
-    if [ ! "$recipients" ]; then
-	recipients="rallsman@lsst.org"
-	print "*** Did not find owner(s) of $1 in $url"
-	print "*** Expected \"package $1: owner@somewhere.edu, owner@gmail.com\""
-	print "*** Sending notification to $recipients instead.\""
-    fi
-    PACKAGE_OWNERS=$recipients
-    #PACKAGE_OWNERS="rallsman@lsst.org" # for debugging
+    PACKAGE_OWNERS=$RECIPIENTS
 }
 
 # test "pick_newest_version" with something like this:
@@ -308,7 +307,7 @@ copy_log() {
 svn_info() {
     local svn_dir=$1
     shift
-    local cmd="svn info $svn_dir | grep -v \"Path: \" | grep -v \"UUID: \" | grep -v \"Repository Root: \" | grep -v \"Node Kind: \" | grep -v \"Schedule: \" | grep -v '^$' | awk '{print \"--- \"\$0}' | replace \"Revision: \" \"Revision: http://dev.lsstcorp.org/trac/changeset/\" | replace \"Rev: \" \"Rev: http://dev.lsstcorp.org/trac/changeset/\"$@"
+    local cmd="svn info $svn_dir | grep -v \"Path: \" | grep -v \"UUID: \" | grep -v \"Repository Root: \" | grep -v \"Node Kind: \" | grep -v \"Schedule: \" | grep -v '^$' | awk '{print \"--- \"\$0}' | sed -e 's/Revision: /Revision: http:\/\/dev.lsstcorp.org\/trac\/changeset\//' | sed -e 's/Rev: /Rev: http:\/\/dev.lsstcorp.org\/trac\/changeset\//'$@"
     eval $cmd
 }
 

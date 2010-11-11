@@ -17,11 +17,16 @@ usage() {
     echo "                    for example \"buildbot@master:/var/www/html/logs\""
     echo "    -log_url <url>: URL prefix for the log destination,"
     echo "                    for example \"http://master/logs/\""
+    echo "    -build_number <number>: buildbot's build number assigned to this run"
     echo "         -no_tests: only build package, don't run tests"
 }
 
 # Only buildbot's local directory is writable on lsst cluster...
 export LSST_DEVEL=/home/buildbot/buildbotSandbox
+
+#Allow developers to access slave directory
+umask 027
+umask -S
 
 # For VM systems
 #source /lsst/stacks/default/loadLSST.sh
@@ -76,6 +81,7 @@ package_is_special() {
         -o $SPCL_PACKAGE = "afwdata" \
         -o $SPCL_PACKAGE = "astrometry_net_data" \
         -o $SPCL_PACKAGE = "isrdata"  \
+        -o $SPCL_PACKAGE = "meas_multifitData"  \
         -o $SPCL_PACKAGE = "auton"  \
         -o $SPCL_PACKAGE = "ssd"  \
         -o $SPCL_PACKAGE = "mpfr"  \
@@ -89,10 +95,10 @@ package_is_special() {
 # -- setup package's svn directory in preparation for the build --
 # $1 = adjusted eups package name
 # return:  0, if svn checkout/update occured withuot error; 1, otherwise.
-# RET_REVISION
-# SVN_URL
-# REVISION 
-# SVN_LOCAL_DIR
+#       :  RET_REVISION
+#       :  SVN_URL
+#       :  REVISION 
+#       :  SVN_LOCAL_DIR
 
 prepareSvnDir() {
 
@@ -134,13 +140,79 @@ prepareSvnDir() {
     if [ ! -d $SVN_LOCAL_DIR ]; then
         step "Check out $SVN_PACKAGE $REVISION from $SVN_URL"
         local SVN_COMMAND="svn checkout $SVN_URL $SVN_LOCAL_DIR "
+        verbose_execute $SVN_COMMAND
     else
         step "Update $SVN_PACKAGE $REVISION from svn"
         local SVN_COMMAND="svn update $SVN_LOCAL_DIR "
+        quiet_execute $SVN_COMMAND
     fi
-    verbose_execute $SVN_COMMAND
 }
 
+# -- On Failure, email appropriate notice to proper recipient(s)
+# $1 = package
+# $2 = recipients
+# $3 = "FIND_DEVELOPER" then scan for last modifier of package
+# return: 0  
+FULL_TRUNK_VS_TRUNK="Full Trunk vs Trunk"
+emailFailure() {
+    if [ "$3" = "FIND_DEVELOPER" ]; then
+        # Determine last developer to modify the package
+        local LAST_MODIFIER=`svn info $SVN_LOCAL_DIR | grep 'Last Changed Author: ' | sed -e "s/Last Changed Author: //"`
+    
+        # Is LAST_MODIFIER already in the list of PACKAGE_OWNERS (aka $2)?
+        local OVERLAP=`echo ${2}  | sed -e "s/.*${LAST_MODIFIER}.*/FOUND/"`
+        unset DEVELOPER
+        if [ "$OVERLAP" != "FOUND" ]; then
+            local url="$PACKAGE_OWNERS_URL?format=txt"
+            DEVELOPER=`curl -s $url | grep "sv ${LAST_MODIFIER}" | sed -e "s/sv ${LAST_MODIFIER}://" -e "s/ from /@/g"`
+            if [ ! "$DEVELOPER" ]; then
+                DEVELOPER=$BUCK_STOPS_HERE
+                print "*** Error: did not find last modifying developer of ${LAST_MODIFIER} in $url"
+                print "*** Expected \"sv <user>: <name> from <somewhere.edu>\""
+            fi
+    
+            print "$BUCK_STOPS_HERE will send build failure notification to $2 and $DEVELOPER"
+            MAIL_TO="$2, $DEVELOPER"
+        else
+            print "$BUCK_STOPS_HERE will send build failure notification to $2"
+            MAIL_TO="$2"
+        fi
+    fi
+
+    EMAIL_SUBJECT="LSST automated build failure: $1 trunk in $FULL_TRUNK_VS_TRUNK"
+
+    rm -f email_body.txt
+##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+# Replace following in next command when debugged AND fix up print statements in above block
+#to: $MAIL_TO\n\
+##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+    printf "\
+from: \"Buildbot\" <$BUCK_STOPS_HERE>\n\
+subject: $EMAIL_SUBJECT\n\
+to: \"Roberta Allsman\" <rallsman@lsst.org>\n\
+cc: $BUCK_STOPS_HERE\n\n" >> email_body.txt
+    printf "\
+A build of the trunk version of \"$1\" failed, against trunk\n\
+versions of its dependencies.\n\n\
+You are being notified because you are listed either \n
+as the package's owner at: $PACKAGE_OWNERS_URL\n\
+or the last developer to modify the svn package.\n\
+For more details on the failure, see http://dev.lsstcorp.org/build/waterfall.\n\
+In the column \"$FULL_TRUNK_VS_TRUNK\", look for links to stdio and $1/config.log.\n\n\
+svn info:\n\n" >> email_body.txt
+    svn_info $SVN_LOCAL_DIR ">> email_body.txt"
+    printf "\
+\n--------------------------------------------------\n\
+Sent by LSST buildbot running on `hostname -f`\n
+Questions?  Contact $BUCK_STOPS_HERE \n" >> email_body.txt
+
+    /usr/sbin/sendmail -t < email_body.txt
+##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+# Uncomment the next command  when ready to send to developers
+##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+    #cat email_body.txt | mail -c "$BUCK_STOPS_HERE" -s "$EMAIL_SUBJECT" "$EMAIL_RECIPIENT"
+    rm email_body.txt
+}
 
 
 # -------------------
@@ -177,6 +249,12 @@ if [ "$1" = "-log_url" ]; then
     LOG_ARGS="$LOG_ARGS $1 $2"
     LOG_URL=$2
     shift 2
+fi
+
+if [ "$1" = "-build_number" ]; then
+    BUILD_NUMBER=$2
+    shift 2
+    print "BUILD_NUMBER: $BUILD_NUMBER"
 fi
 
 if [ "$1" = "-no_tests" ]; then
@@ -320,16 +398,18 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
                 pretty_execute $INSTALL_CMD
                 if [ $RETVAL != 0 ]; then
                     print "Failed to install $CUR_PACKAGE $CUR_VERSION with lsstpkg."
+                    emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
                     exit 1
                 else
                     print "Dependency: $CUR_PACKAGE, successfully installed."
                 fi
             fi
         else
-            # if dependency needs just needs 'current', go with it
+            # if dependency just needs 'current', go with it
             if [ `eups list $CUR_PACKAGE | wc -l` = 0 ]; then
                 print "Failed to setup dependency: $CUR_PACKAGE."
                 print "An 'lsstpkg install' version was not provided."
+                emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
                 exit 1
             fi
             CUR_VERSION=""
@@ -337,6 +417,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         pretty_execute "setup -j $CUR_PACKAGE $CUR_VERSION"
         if [ $RETVAL != 0 ]; then
             print "Failed to setup dependency: $CUR_PACKAGE $CUR_VERSION."
+            emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
             exit 1
         fi
         print "Dependency: $CUR_PACKAGE $CUR_VERSION, successfully installed."
@@ -366,6 +447,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     prepareSvnDir $CUR_PACKAGE
     if [ $RETVAL != 0 ]; then
         print "svn checkout or update failed; is $CUR_PACKAGE $REVISION a valid version?"
+        emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
         exit 1
     fi
 
@@ -445,8 +527,18 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         # --               later, possibly 'rm' source directory --
         cd $WORK_PWD
 
+        # Get Email List for Package Owners (returned in $PACKAGE_OWNERS)
+        fetch_package_owners $CUR_PACKAGE
+
         print "Installation of $CUR_PACKAGE $REVISION failed."
         print "Unable to build trunk-vs-trunk version of $PACKAGE due to failed build of dependency: $CUR_PACKAGE $REVISION ."
+        if [ "$CUR_PACKAGE" = "$PACKAGE" ]; then
+            print ".................CUR_PACKAGE :$CUR_PACKAGE: -eq   PACKAGE :$PACKAGE:"
+            emailFailure "$CUR_PACKAGE"  "$PACKAGE_OWNERS" "FIND_DEVELOPER"
+        else
+            print ".................CUR_PACKAGE :$CUR_PACKAGE: -ne   PACKAGE :$PACKAGE:"
+            emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
+        fi
         exit 1
     fi
 

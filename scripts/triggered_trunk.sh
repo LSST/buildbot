@@ -161,10 +161,10 @@ while [ $1 ]; do
 
 		rm -f email_body.txt
 		printf "\
-from: \"Buildbot\" <robyn@lsst.org>\n\
+from: \"Buildbot\" <$BUCK_STOPS_HERE>\n\
 subject: $EMAIL_SUBJECT\n\
 to: $EMAIL_RECIPIENT\n\
-cc: \"Bill Baker\" <bbaker@ncsa.illinois.edu>, \"Robyn Allsman\" <robyn@lsst.org>\n\n" >> email_body.txt
+cc: $BUCK_STOPS_HERE\n\n" >> email_body.txt
 		printf "\
 A build of the trunk version of \"$PACKAGE\" failed, against $MINIMAL_OR_CURRENT\n\
 versions of its dependencies.\n\n\
@@ -178,7 +178,7 @@ svn info:\n\n" >> email_body.txt
 		printf "\
 \n--------------------------------------------------\n\
 Sent by LSST buildbot running on `hostname -f`\n
-Questions?  Contact Robyn Allsman, robyn@lsst.org\n" >> email_body.txt
+Questions?  Contact $BUCK_STOPS_HERE\n" >> email_body.txt
 
 		/usr/sbin/sendmail -t < email_body.txt
 #		cat email_body.txt | mail -c "bbaker@ncsa.uiuc.edu" -s "$EMAIL_SUBJECT" "$EMAIL_RECIPIENT"
