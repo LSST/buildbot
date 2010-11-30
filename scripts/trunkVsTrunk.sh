@@ -26,7 +26,6 @@ export LSST_DEVEL=/home/buildbot/buildbotSandbox
 
 #Allow developers to access slave directory
 umask 027
-umask -S
 
 # For VM systems
 #source /lsst/stacks/default/loadLSST.sh
@@ -154,7 +153,9 @@ prepareSvnDir() {
 # $3 = "FIND_DEVELOPER" then scan for last modifier of package
 # return: 0  
 FULL_TRUNK_VS_TRUNK="Full Trunk vs Trunk"
+URL_FULL_TRUNK_VS_TRUNK="http://dev.lsstcorp.org/build/builders/Full%%20Trunk%%20vs%%20Trunk/builds"
 emailFailure() {
+    MAIL_TO="$2"
     if [ "$3" = "FIND_DEVELOPER" ]; then
         # Determine last developer to modify the package
         local LAST_MODIFIER=`svn info $SVN_LOCAL_DIR | grep 'Last Changed Author: ' | sed -e "s/Last Changed Author: //"`
@@ -175,45 +176,44 @@ emailFailure() {
             MAIL_TO="$2, $DEVELOPER"
         else
             print "$BUCK_STOPS_HERE will send build failure notification to $2"
-            MAIL_TO="$2"
         fi
     fi
 
     EMAIL_SUBJECT="LSST automated build failure: $1 trunk in $FULL_TRUNK_VS_TRUNK"
 
     rm -f email_body.txt
-##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
 # Replace following in next command when debugged AND fix up print statements in above block
 #to: $MAIL_TO\n\
-##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+##_#_#_#_#_#_#_#_#_#_#_##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
     printf "\
 from: \"Buildbot\" <$BUCK_STOPS_HERE>\n\
 subject: $EMAIL_SUBJECT\n\
 to: \"Roberta Allsman\" <rallsman@lsst.org>\n\
 cc: $BUCK_STOPS_HERE\n\n" >> email_body.txt
     printf "\
-A build of the trunk version of \"$1\" failed, against trunk\n\
-versions of its dependencies.\n\n\
-You are being notified because you are listed either \n
-as the package's owner at: $PACKAGE_OWNERS_URL\n\
-or the last developer to modify the svn package.\n\
-For more details on the failure, see http://dev.lsstcorp.org/build/waterfall.\n\
-In the column \"$FULL_TRUNK_VS_TRUNK\", look for links to stdio and $1/config.log.\n\n\
-svn info:\n\n" >> email_body.txt
+A build of the trunk version of \"$1\" failed, against trunk versions of its dependencies.\n\n\
+You were notified because you are either the package's owner or its last modifier.\n\n\
+The $PACKAGE failure log is available at: ${URL_FULL_TRUNK_VS_TRUNK}/${BUILD_NUMBER}/steps/$PACKAGE/logs/stdio\n\
+The Continuous Integration build log is available at: ${URL_FULL_TRUNK_VS_TRUNK}/${BUILD_NUMBER}\n" >> email_body.txt
+    printf "\
+Until next Monday, the build directories will be available for copy from: lsst6.ncsa.uiuc.edu:$WORK_PWD/svn/\n\n\
+svn info:\n" >> email_body.txt
     svn_info $SVN_LOCAL_DIR ">> email_body.txt"
     printf "\
 \n--------------------------------------------------\n\
-Sent by LSST buildbot running on `hostname -f`\n
+Sent by LSST buildbot running on `hostname -f`\n\
 Questions?  Contact $BUCK_STOPS_HERE \n" >> email_body.txt
 
     /usr/sbin/sendmail -t < email_body.txt
-##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
 # Uncomment the next command  when ready to send to developers
-##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
     #cat email_body.txt | mail -c "$BUCK_STOPS_HERE" -s "$EMAIL_SUBJECT" "$EMAIL_RECIPIENT"
     rm email_body.txt
 }
 
+#http://dev.lsstcorp.org/build/builders/Full%20Trunk%20vs%20Trunk/builds/84/steps/mops_daymops/logs/stdio
 
 # -------------------
 # -- get arguments --
@@ -251,6 +251,7 @@ if [ "$1" = "-log_url" ]; then
     shift 2
 fi
 
+BUILD_NUMBER=0
 if [ "$1" = "-build_number" ]; then
     BUILD_NUMBER=$2
     shift 2
@@ -533,10 +534,8 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         print "Installation of $CUR_PACKAGE $REVISION failed."
         print "Unable to build trunk-vs-trunk version of $PACKAGE due to failed build of dependency: $CUR_PACKAGE $REVISION ."
         if [ "$CUR_PACKAGE" = "$PACKAGE" ]; then
-            print ".................CUR_PACKAGE :$CUR_PACKAGE: -eq   PACKAGE :$PACKAGE:"
             emailFailure "$CUR_PACKAGE"  "$PACKAGE_OWNERS" "FIND_DEVELOPER"
         else
-            print ".................CUR_PACKAGE :$CUR_PACKAGE: -ne   PACKAGE :$PACKAGE:"
             emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
         fi
         exit 1
@@ -551,6 +550,6 @@ done < "$REAL_DEPS"
 if [ $DO_TESTS = 0 ]; then
     print "Successfully built and tested trunk-vs-trunk version of $PACKAGE"
 else
-    print "Successfully built (but not tested) trunk-vs-trunk version of $PACKAGE"
+    print "Successfully built, but not tested, trunk-vs-trunk version of $PACKAGE"
 fi
 exit 0
