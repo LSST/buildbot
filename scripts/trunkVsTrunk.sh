@@ -197,7 +197,7 @@ You were notified because you are either the package's owner or its last modifie
 The $PACKAGE failure log is available at: ${URL_FULL_TRUNK_VS_TRUNK}/${BUILD_NUMBER}/steps/$PACKAGE/logs/stdio\n\
 The Continuous Integration build log is available at: ${URL_FULL_TRUNK_VS_TRUNK}/${BUILD_NUMBER}\n" >> email_body.txt
     printf "\
-Until next Monday, the build directories will be available for copy from: lsst6.ncsa.uiuc.edu:$WORK_PWD/svn/\n\n\
+Until next Monday, the build directories will be available for copy from: fbot.ncsa.illinois.edu:$WORK_PWD/svn/\n\n\
 svn info:\n" >> email_body.txt
     svn_info $SVN_LOCAL_DIR ">> email_body.txt"
     printf "\
