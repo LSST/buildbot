@@ -27,9 +27,6 @@ export LSST_DEVEL=/home/buildbot/buildbotSandbox
 #Allow developers to access slave directory
 umask 027
 
-# For VM systems
-#source /lsst/stacks/default/loadLSST.sh
-# For lsst cluster
 source /lsst/DC3/stacks/default/loadLSST.sh
 
 source ${0%/*}/build_functions.sh

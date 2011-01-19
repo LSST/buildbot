@@ -25,7 +25,7 @@ usage() {
     echo "                    svn#### - svn revision ####"
     echo "                    arbitrary - any legitimate released version of a package"
 }
-source /lsst/stacks/default/loadLSST.sh
+source /lsst/DC3/stacks/default/loadLSST.sh
 source ${0%/*}/build_functions.sh
 
 

@@ -20,15 +20,15 @@ if [ $? != 0 ]; then
     exit 1
 fi
 
-PYTHON_INSTALLED=`eups list | grep python | wc -l`
+PYTHON_INSTALLED=`eups list -s python | wc -l`
 if [ $PYTHON_INSTALLED = "1" ]; then
     exit 0 # succeeded - found python installed
 elif [ $PYTHON_INSTALLED = "0" ]; then
     echo "No python installed:";
-    eups list | grep python
+    eups list -s python
     exit 1 # failed - no python installed
 else
     echo "Unexpected: found more than one python installed:";
-    eups list | grep python
+    eups list -s python
     exit 1
 fi
