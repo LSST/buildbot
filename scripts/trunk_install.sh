@@ -89,14 +89,6 @@ CHAIN=$INCOMING_CHAIN:$PACKAGE
 
 TABLE_FILE_PREFIX=$PACKAGE
 
-#----------------------------------------------------------------------
-#----------------------------------------------------------------------
-#RAA   F I X   F I X   when LSSTPipe subversion is updated to 1.6+     F I X
-# Prefer to use system resident svn 1.6+ instead of LSSTPipe svn 1.5
-pretty_execute unsetup subversion
-#----------------------------------------------------------------------
-#----------------------------------------------------------------------
-
 
 # -------------------
 # -- special cases -- la la la I can't hear you
@@ -395,12 +387,8 @@ step "Install $PACKAGE $VERSION"
 # -- setup self --
 # ------------------
 pushd $SVN_LOCAL_DIR > /dev/null
-#pretty_execute "eups list -s | grep scons # BEFORE setup"
-#pretty_execute "eups list -s # BEFORE setup"
 pretty_execute "setup -r ."
 #pretty_execute "setup -r . --exact"
-#pretty_execute "eups list -s | grep scons # AFTER setup"
-#pretty_execute "eups list -s # AFTER setup"
 pretty_execute "eups list $PACKAGE"
 if [ $RETVAL != 0 ]; then
     print "Failed to setup $PACKAGE $VERSION"
@@ -417,24 +405,14 @@ pushd $SVN_LOCAL_DIR > /dev/null
 debug "Clean up previous attempt"
 quiet_execute scons -c
 scons_tests $PACKAGE
-pretty_execute "scons opt=3 install $SCONS_TESTS declare"
-#pretty_execute "scons opt=3 -j 2 force=true install $SCONS_TESTS declare"
+#RAA 25Jan11# "force=true" nec so m4 gen'd *.hpp files don't trigger svn error
+pretty_execute "scons opt=3 force=true install $SCONS_TESTS declare"
 SCONS_EXIT=$RETVAL
 if [ $SCONS_EXIT != 0 ]; then
     print "Install/test failed: $PACKAGE $VERSION"
     FAILED_INSTALL=true
 fi
 
-# Why would we want to eups declare this package?  I don't see a reason.
-# setup -r . && scons should be enough.
-#
-# pretty_execute "eups declare -r . $PACKAGE $VERSION"
-# # if no current version of self, declare self current
-# pretty_execute "eups list -c $PACKAGE | grep Current"
-# if [ ! "`eups list -c $PACKAGE | grep Current`" ]; then
-#     print "No version of $PACKAGE is declared current; declaring $VERSION current."
-#     pretty_execute eups declare -c $PACKAGE $VERSION
-# fi
 
 # preserve logs
 LOG_FILE="config.log"

@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /bin/bash 
 # check named packages for changes (on the trunk) and build any that
 # have changed since the last time this script was run
 
@@ -6,24 +6,111 @@ usage() {
     echo "Usage: $0 [options] <package names>"
     echo "Options (must be in this order):"
     echo "          -verbose: print out extra debugging info"
-    echo "  -against_current: build against current versions of dependencies"
+    echo "    -against_current: build against current versions of dependencies"
     echo "                    instead of minimal versions"
-    echo "     -email_notify: if specified, notify this address instead of the package"
+    echo "    -email_notify: if specified, notify this address instead of the package"
     echo "                    owner, if this build fails"
-    echo "  -log_dest <dest>: scp destination for config.log,"
+    echo "    -log_dest <dest>: scp destination for config.log,"
     echo "                    for example \"buildbot@master:/var/www/html/logs\""
     echo "    -log_url <url>: URL prefix for the log destination,"
     echo "                    for example \"http://master/logs/\""
-    echo "      -name <name>: The name of this builder (used in email notifications)."
+    echo "    -build_number <number>: buildbot's build number assigned to this run"
+    echo "    -name <name>: The name of this builder (used in email notifications)."
 }
 
+source /lsst/DC3/stacks/default/loadLSST.sh
 source ${0%/*}/build_functions.sh
 
 SVN_SERVER="svn.lsstcorp.org"
 SUMMARY_SVN="summary_svn" # summary of svn activity
 rm -f $SUMMARY_SVN
 
-# get arguments
+
+# ---------------
+# -- Functions --
+# ---------------
+# -- On Failure, email appropriate notice to proper recipient(s)
+# $1 = package
+# $2 = recipients
+# $3 = "FIND_DEVELOPER" then scan for last modifier of package
+# return: 0
+emailFailure() {
+    MAIL_TO="$2"
+    if [ "$3" = "FIND_DEVELOPER" ]; then
+        # Determine last developer to modify the package
+        local LAST_MODIFIER=`svn info $SVN_LOCAL_DIR | grep 'Last Changed Author: ' | sed -e "s/Last Changed Author: //"`
+
+        # Is LAST_MODIFIER already in the list of PACKAGE_OWNERS (aka $2)?
+        local OVERLAP=`echo ${2}  | sed -e "s/.*${LAST_MODIFIER}.*/FOUND/"`
+        unset DEVELOPER
+        if [ "$OVERLAP" != "FOUND" ]; then
+            local url="$PACKAGE_OWNERS_URL?format=txt"
+            DEVELOPER=`curl -s $url | grep "sv ${LAST_MODIFIER}" | sed -e "s/sv ${LAST_MODIFIER}://" -e "s/ from /@/g"`
+            if [ ! "$DEVELOPER" ]; then
+                DEVELOPER=$BUCK_STOPS_HERE
+                print "*** Error: did not find last modifying developer of ${LAST_MODIFIER} in $url"
+                print "*** Expected \"sv <user>: <name> from <somewhere.edu>\""
+            fi
+
+            print "$BUCK_STOPS_HERE will send build failure notification to $2 and $DEVELOPER"
+            MAIL_TO="$2, $DEVELOPER"
+        else
+            print "$BUCK_STOPS_HERE will send build failure notification to $2"
+        fi
+    fi
+
+    if [ $MINIMAL_OR_CURRENT = "current" ]; then
+        INC_TRUNK_VS_CURRENTorMINIMAL="Trunk vs Current"
+        URL_INC_TRUNK_VS_CURRENTorMINIMAL="http://dev.lsstcorp.org/build/builders/Trunk%%20vs%%20Current/builds"
+    else
+        INC_TRUNK_VS_CURRENTorMINIMAL="Trunk vs Minimal"
+        URL_INC_TRUNK_VS_CURRENTorMINIMAL="http://dev.lsstcorp.org/build/builders/Trunk%%20vs%%20Minimal/builds"
+    fi
+
+    EMAIL_SUBJECT="LSST automated build failure: $1 trunk in $INC_TRUNK_VS_CURRENTorMINIMAL"
+    rm -f email_body.txt
+
+
+    if [ "$EMAIL_NOTIFY" ]; then
+        MAIL_TO=$EMAIL_NOTIFY
+    else
+        #-----------------------------------------------------------
+        #     R E M O V E   when script     D E B U G G E D
+        MAIL_TO="robyn@noao.edu"
+        #     R E M O V E   when script     D E B U G G E D
+        #-----------------------------------------------------------
+    fi
+    print "Sending build failure notification to $MAIL_TO"
+    EMAIL_SUBJECT="LSST automated build failure: $PACKAGE trunk in $BUILDER_NAME"
+
+    rm -f email_body.txt
+    printf "\
+from: \"Buildbot\" <$BUCK_STOPS_HERE>\n\
+subject: $EMAIL_SUBJECT\n\
+to: $MAIL_TO\n\
+cc: $BUCK_STOPS_HERE\n\n" >> email_body.txt
+    printf "\
+A build of the trunk version of \"$PACKAGE\" failed, against $MINIMAL_OR_CURRENT\n\
+versions of its dependencies.\n\n\
+You were notified because you are either the package's owner or its last modifier.\n\n\
+The $PACKAGE failure log is available at: ${URL_INC_TRUNK_VS_CURRENTorMINIMAL}/${BUILD_NUMBER}/steps/Incremental%%20Trunk/logs/stdio\n\
+The buildbot log is available at: ${URL_INC_TRUNK_VS_CURRENTorMINIMAL}/${BUILD_NUMBER}\n\n
+svn info:\n" >> email_body.txt
+    svn_info $SVN_LOCAL_DIR >> email_body.txt
+    printf "\
+\n--------------------------------------------------\n\
+Sent by LSST buildbot running on `hostname -f`\n
+Questions?  Contact $BUCK_STOPS_HERE\n" >> email_body.txt
+
+    /usr/sbin/sendmail -t < email_body.txt
+#    cat email_body.txt | mail -c $BUCK_STOPS_HERE -s "$EMAIL_SUBJECT" "$MAIL_TO"
+    rm email_body.txt
+}
+
+
+# -------------------
+# -- get arguments --
+# -------------------
 if [ "$1" = "-verbose" -o "$1" = "-debug" ]; then
     VERBOSE=true
     VERBOSE_ARGS=$1
@@ -55,6 +142,14 @@ if [ "$1" = "-log_url" ]; then
     LOG_URL=$2
     shift 2
 fi
+
+BUILD_NUMBER=0
+if [ "$1" = "-build_number" ]; then
+    BUILD_NUMBER=$2
+    shift 2
+    print "BUILD_NUMBER: $BUILD_NUMBER"
+fi
+
 if [ "$1" = "-name" ]; then
     BUILDER_NAME=$2
     shift 2
@@ -68,15 +163,16 @@ if [ "$1" = "" -o "$1" = "--help" -o "$1" = "-h" -o "$1" = "-help" ]; then
     exit 1
 fi
 
+
 tee_print() {
     echo $@ | tee -a $SUMMARY_SVN
 }
 
 # for each package listed, check for updates
 mkdir -p svn
-while [ $1 ]; do
-    PACKAGE=$1
-    shift
+for i in $1 ; do
+    print "Next Package to process: $i"
+    PACKAGE=$i
     unset SVN_HAS_NEW
     unset ATTEMPT
 #    tee_print "=== ========================================================================"
@@ -150,40 +246,9 @@ while [ $1 ]; do
 	    FAILED_OVERALL=true
 	    FAILURES="$FAILURES $PACKAGE" # concatenate names of failed packages
 	    if [ ! -f "$FAIL_FILE" ]; then # failed this time but didn't fail previously
-		fetch_package_owners $PACKAGE
-		if [ "$EMAIL_NOTIFY" ]; then
-		    EMAIL_RECIPIENT=$EMAIL_NOTIFY
-		else
-		    EMAIL_RECIPIENT=$PACKAGE_OWNERS
-		fi
-		print "Sending build failure notification to $EMAIL_RECIPIENT"
-		EMAIL_SUBJECT="LSST automated build failure: $PACKAGE trunk in $BUILDER_NAME"
-
-		rm -f email_body.txt
-		printf "\
-from: \"Buildbot\" <$BUCK_STOPS_HERE>\n\
-subject: $EMAIL_SUBJECT\n\
-to: $EMAIL_RECIPIENT\n\
-cc: $BUCK_STOPS_HERE\n\n" >> email_body.txt
-		printf "\
-A build of the trunk version of \"$PACKAGE\" failed, against $MINIMAL_OR_CURRENT\n\
-versions of its dependencies.\n\n\
-You are being notified because you are listed as a package owner at:\n\n\
-    $PACKAGE_OWNERS_URL\n\n\
-For more details on the failure, see http://dev.lsstcorp.org/build/waterfall.\n\
-In the column \"$BUILDER_NAME\", look for links to stdio, $PACKAGE/config.log,\n\
-and $PACKAGE/build.log.\n\n\
-svn info:\n\n" >> email_body.txt
-		svn_info $SVN_LOCAL_DIR ">> email_body.txt"
-		printf "\
-\n--------------------------------------------------\n\
-Sent by LSST buildbot running on `hostname -f`\n
-Questions?  Contact $BUCK_STOPS_HERE\n" >> email_body.txt
-
-		/usr/sbin/sendmail -t < email_body.txt
-#		cat email_body.txt | mail -c "bbaker@ncsa.uiuc.edu" -s "$EMAIL_SUBJECT" "$EMAIL_RECIPIENT"
-		rm email_body.txt
-	    else
+                fetch_package_owners $PACKAGE
+                emailFailure "$PACKAGE" "$PACKAGE_OWNERS" "FIND_DEVELOPER"
+            else
 		print "Not sending failure notification for $PACKAGE because previous attempt also failed."
 	    fi
 	    touch $FAIL_FILE
