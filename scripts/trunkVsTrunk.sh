@@ -3,6 +3,7 @@
 # ensure that its minimal dependencies are installed likewise
 
 
+#--------------------------------------------------------------------------
 usage() {
 #80 cols  ................................................................................
     echo "Usage: $0 [options] package"
@@ -20,6 +21,7 @@ usage() {
     echo "    -build_number <number>: buildbot's build number assigned to this run"
     echo "         -no_tests: only build package, don't run tests"
 }
+#--------------------------------------------------------------------------
 
 # Only buildbot's local directory is writable on lsst cluster...
 export LSST_DEVEL=/home/buildbot/buildbotSandbox
@@ -44,9 +46,11 @@ WEB_ROOT="/var/www/html/doxygen"
 SKIP_THESE_TESTS=""
 
 
+#--------------------------------------------------------------------------
 # ---------------
 # -- Functions --
 # ---------------
+#--------------------------------------------------------------------------
 # -- Alter eups name not corresponding to directory path convention --
 # $1 = eups package name
 # return ADJUSTED_NAME in LSST standard so its svn directory name is derived OK
@@ -61,6 +65,7 @@ adjustBadEupsName() {
 }
 
 
+#--------------------------------------------------------------------------
 # -- Some LSST internal packages should never be built from trunk --
 # $1 = eups package name
 # return 0 if a special LSST package which should be considered external
@@ -88,62 +93,8 @@ package_is_special() {
         return 1
     fi
 }
-# -- setup package's svn directory in preparation for the build --
-# $1 = adjusted eups package name
-# return:  0, if svn checkout/update occured withuot error; 1, otherwise.
-#       :  RET_REVISION
-#       :  SVN_URL
-#       :  REVISION 
-#       :  SVN_LOCAL_DIR
 
-prepareSvnDir() {
-
-    # ------------------------------------------------------------
-    # -- NOTE:  most variables in this function are global!  NOTE--
-    # ------------------------------------------------------------
-
-    if [ "$1" = "" ]; then
-        print "No package name for svn extraction. See LSST buildbot developer."
-        exit 1
-    fi
-
-    local SVN_PACKAGE=$1 
-
-    # package is internal and should be built from trunk
-    lookup_svn_trunk_revision $SVN_PACKAGE
-    local PLAIN_VERSION="$RET_REVISION"
-    RET_REVISION="svn_$RET_REVISION"
-    SVN_URL=$RET_SVN_URL
-    REVISION=$RET_REVISION
-
-    print "Internal package: $SVN_PACKAGE will be built from trunk version: $PLAIN_VERSION"
-    
-    mkdir -p svn
-    SVN_LOCAL_DIR="svn/${SVN_PACKAGE}_${PLAIN_VERSION}"
-    
-    # if force, remove existing package
-    if [ "$FORCE" -a -d $SVN_LOCAL_DIR ]; then
-        lookup_svn_revision $SVN_LOCAL_DIR
-        print "Remove existing $SVN_PACKAGE $REVISION"
-        if [ `eups list $SVN_PACKAGE $REVISION | grep Setup | wc -l` = 1 ]; then
-            unsetup -j $SVN_PACKAGE $REVISION
-        fi
-        pretty_execute "eups remove -N $SVN_PACKAGE $REVISION"
-        # remove svn dir, to force re-checkout
-        pretty_execute "rm -rf $SVN_LOCAL_DIR"
-    fi
-    
-    if [ ! -d $SVN_LOCAL_DIR ]; then
-        step "Check out $SVN_PACKAGE $REVISION from $SVN_URL"
-        local SVN_COMMAND="svn checkout $SVN_URL $SVN_LOCAL_DIR "
-        verbose_execute $SVN_COMMAND
-    else
-        step "Update $SVN_PACKAGE $REVISION from svn"
-        local SVN_COMMAND="svn update $SVN_LOCAL_DIR "
-        quiet_execute $SVN_COMMAND
-    fi
-}
-
+#--------------------------------------------------------------------------
 # -- On Failure, email appropriate notice to proper recipient(s)
 # $1 = package
 # $2 = recipients
@@ -209,6 +160,7 @@ Questions?  Contact $BUCK_STOPS_HERE \n" >> email_body.txt
     #cat email_body.txt | mail -c "$BUCK_STOPS_HERE" -s "$EMAIL_SUBJECT" "$EMAIL_RECIPIENT"
     rm email_body.txt
 }
+#--------------------------------------------------------------------------
 
 #http://dev.lsstcorp.org/build/builders/Full%20Trunk%20vs%20Trunk/builds/84/steps/mops_daymops/logs/stdio
 

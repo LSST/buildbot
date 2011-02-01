@@ -4,12 +4,14 @@
 BUCK_STOPS_HERE="rallsman@lsst.org"
 
 
+#---------------------------------------------------------------------------
 # set $RET_CURRENT_VERSION to current version of $1, from current.list
 lookup_current_version() {
     fetch_current_line $@
     RET_CURRENT_VERSION=${CURRENT_LINE[2]}
 }
 
+#---------------------------------------------------------------------------
 # include "tests" in scons command?
 # pass package name as argument; $SCONS_TESTS will either be "tests" or "",
 # depending on whether the package is known not to support the "tests" target
@@ -21,6 +23,7 @@ scons_tests() {
     fi
 }
 
+#---------------------------------------------------------------------------
 # look up the owners of a package in http://dev.lsstcorp.org/trac/wiki/PackageOwners?format=txt
 # return result as PACKAGE_OWNERS
 PACKAGE_OWNERS_URL="http://dev.lsstcorp.org/trac/wiki/PackageOwners"
@@ -37,6 +40,7 @@ fetch_package_owners() {
     PACKAGE_OWNERS=$RECIPIENTS
 }
 
+#---------------------------------------------------------------------------
 # test "pick_newest_version" with something like this:
 # pick_newest_version 1.3 1.3+foo 1.4.2 1.4 svn9999 svn11430 svn11430+foo 1.3.4 svn11431 1.4.1
 # echo $RET_NEWEST_VERSION
@@ -61,6 +65,7 @@ pick_newest_version() {
     done
 }
 
+#---------------------------------------------------------------------------
 # return 0 if $1 is external, 1 if not
 package_is_external() {
     fetch_current_line $@
@@ -75,6 +80,7 @@ package_is_external() {
     fi
 }
 
+#---------------------------------------------------------------------------
 # $1 = raw package name (include devenv_ if present)
 # $2 = version (3.1.2, svn3438)
 # requires that SVN_SERVER be set already
@@ -104,6 +110,7 @@ svn_url() {
     fi
 }
 
+#---------------------------------------------------------------------------
 # $1 = package name
 # sets RET_SVN_SERVER_DIR
 svn_server_dir() {
@@ -114,6 +121,7 @@ svn_server_dir() {
     return 0
 }
 
+#---------------------------------------------------------------------------
 # fetch $1's line from current.list, and set $CURRENT_LINE to its
 # contents, as an array, split by white space
 fetch_current_line() {
@@ -174,6 +182,7 @@ fetch_current_line() {
     fi
 }
 
+#---------------------------------------------------------------------------
 # parameter: line to split on spaces
 # return: array, via RET
 split() {
@@ -186,6 +195,7 @@ split() {
     done
 }
 
+#---------------------------------------------------------------------------
 # print a numbered header
 STEP=1
 step() {
@@ -194,12 +204,14 @@ step() {
     let "STEP += 1"
 }
 
+#---------------------------------------------------------------------------
 # print, with an indent determined by the command line -indent option
 SPACES="                                                                   "
 print() {
     echo "${SPACES:0:$INDENT}$@"
 }
 
+#---------------------------------------------------------------------------
 # print, but only if -verbose or -debug is specified
 debug() {
     if [ "$DEBUG" ]; then
@@ -207,6 +219,7 @@ debug() {
     fi
 }
 
+#---------------------------------------------------------------------------
 # execute the command; if verbose, make its output visible
 verbose_execute() {
     if [ "$DEBUG" ]; then
@@ -216,6 +229,7 @@ verbose_execute() {
     fi
 }
 
+#---------------------------------------------------------------------------
 # print out the command and execute it, but pipe its output to /dev/null
 # RETVAL is set to exit value
 # prepend -anon to execute without displaying command
@@ -230,6 +244,7 @@ quiet_execute() {
     RETVAL=$?
 }
 
+#---------------------------------------------------------------------------
 # print a multi-line output in the same way as print()
 # RETVAL is set to exit value
 # prepend -anon to execute without displaying command
@@ -268,6 +283,7 @@ pretty_execute() {
     fi
 }
 
+#---------------------------------------------------------------------------
 # params: file_description filename dest_host remote_dir additional_dir url
 # for example copy_log config.log buildbot@tracula /var/www/html/logs /afw/trunk http://dev/buildlogs
 copy_log() {
@@ -304,6 +320,7 @@ copy_log() {
     fi
 }
 
+#---------------------------------------------------------------------------
 svn_info() {
     local svn_dir=$1
     shift
@@ -311,12 +328,14 @@ svn_info() {
     eval $cmd
 }
 
+#---------------------------------------------------------------------------
 # sets RET_REVISION to the svn version of the trunk of the specified package
 lookup_svn_trunk_revision() {
     svn_url $1 trunk
     lookup_svn_revision $RET_SVN_URL
 }
 
+#---------------------------------------------------------------------------
 # sets RET_REVISION to the svn version of the current dir or url
 lookup_svn_revision() {
     local line=`svn info $1 | grep "Last Changed Rev"`
@@ -331,6 +350,7 @@ lookup_svn_revision() {
     fi
 }
 
+#---------------------------------------------------------------------------
 KEEP_TRUNK="| grep -v afwdata | grep -v astrometry_net_data | grep -v isrdata | grep -v lsst | grep -v scons"
 
 # update TRUNK_PACKAGE_COUNT to match the number of packages whose 
@@ -348,6 +368,7 @@ count_trunk_packages() {
     debug "TRUNK_PACKAGE_COUNT:$TRUNK_PACKAGE_COUNT:"
 }
 
+#---------------------------------------------------------------------------
 # attempt eups remove on each package whose version matches svn#### or equals "trunk" and is NOT external
 remove_trunk_packages() {
     NOREMOVE=""
@@ -372,4 +393,63 @@ remove_trunk_packages() {
 	    local package=$word
 	fi
     done
+}
+
+#---------------------------------------------------------------------------
+# -- setup package's **trunk** svn directory in preparation for the build --
+# $1 = adjusted eups package name
+# return:  0, if svn checkout/update occured withuot error; 1, otherwise.
+#       :  RET_REVISION
+#       :  SVN_URL
+#       :  REVISION 
+#       :  SVN_LOCAL_DIR
+
+prepareSvnDir() {
+
+    # ------------------------------------------------------------
+    # -- NOTE:  most variables in this function are global!  NOTE--
+    # ------------------------------------------------------------
+
+    if [ "$1" = "" ]; then
+        print "No package name for svn extraction. See LSST buildbot developer."
+        exit 1
+    fi
+
+    local SVN_PACKAGE=$1 
+
+    # package is internal and should be built from trunk
+    lookup_svn_trunk_revision $SVN_PACKAGE
+    local PLAIN_VERSION="$RET_REVISION"
+    RET_REVISION="svn_$RET_REVISION"
+    SVN_URL=$RET_SVN_URL
+    REVISION=$RET_REVISION
+
+    print "Internal package: $SVN_PACKAGE will be built from trunk version: $PLAIN_VERSION"
+    
+    mkdir -p svn
+    SVN_LOCAL_DIR="svn/${SVN_PACKAGE}_${PLAIN_VERSION}"
+    
+    # if force, remove existing package
+    if [ "$FORCE" -a -d $SVN_LOCAL_DIR ]; then
+        lookup_svn_revision $SVN_LOCAL_DIR
+        print "Remove existing $SVN_PACKAGE $REVISION"
+        if [ `eups list $SVN_PACKAGE $REVISION | grep Setup | wc -l` = 1 ]; then
+            unsetup -j $SVN_PACKAGE $REVISION
+        fi
+        pretty_execute "eups remove -N $SVN_PACKAGE $REVISION"
+        # remove svn dir, to force re-checkout
+        pretty_execute "rm -rf $SVN_LOCAL_DIR"
+    fi
+    
+    if [ ! -d $SVN_LOCAL_DIR ]; then
+        step "Check out $SVN_PACKAGE $REVISION from $SVN_URL"
+        local SVN_COMMAND="svn checkout $SVN_URL $SVN_LOCAL_DIR "
+        verbose_execute $SVN_COMMAND
+    else
+        step "Update $SVN_PACKAGE $REVISION from svn"
+        local SVN_COMMAND="svn update $SVN_LOCAL_DIR "
+        #quiet_execute $SVN_COMMAND
+        pretty_execute $SVN_COMMAND
+    fi
+    echo "Svn directory prepared"
 }
