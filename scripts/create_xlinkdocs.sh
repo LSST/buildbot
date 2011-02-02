@@ -27,7 +27,6 @@ DEV_SERVER="lsstdev.ncsa.uiuc.edu"
 SVN_SERVER="svn.lsstcorp.org"
 WEB_HOST="willy.ncsa.illinois.edu"
 WEB_ROOT="/var/www/html/doxygen"
-SYM_LINK="xlinkDoxyDoc"
 
 # -------------------
 # -- get arguments --
@@ -39,6 +38,8 @@ if [ "$DOXY_TYPE" != "trunk"  -a "$DOXY_TYPE" != "current" ]; then
     usage
     exit 1
 fi
+SYM_LINK="x_${DOXY_TYPE}DoxyDoc"
+echo "DOXY_TYPE: $DOXY_TYPE"
 shift
 
 #*************************************************************************
@@ -83,7 +84,7 @@ fi
 cd doxygen
 
 # rename the htmlDir 
-DOC_DIR="xlink_$DATE" 
+DOC_DIR="xlink_${DOXY_TYPE}_$DATE" 
 echo "DOC_DIR: $DOC_DIR"
 mv htmlDir  $DOC_DIR
 chmod o+rx $DOC_DIR
