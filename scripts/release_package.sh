@@ -1,6 +1,11 @@
 #! /bin/bash
 # install a release package and all of its dependencies, using lsstpkg
 
+# Installation of Release Packages should occur in either:
+#  * the system space or 
+#  * alternate space named by: '-lsstdir' parameter
+unset LSST_DEVEL
+
 if [[ $1 == "" ]]
 then
     echo "usage: $0 [-lsstdir dir] [-no_doxygen] [--tag=current] package [packages to check]"
@@ -41,11 +46,14 @@ INSTALL_PACKAGE=$1
 
 step "installing LSST package '$INSTALL_PACKAGE'"
 
+print "Before loadLSST.sh: LSST_HOME: $LSST_HOME   LSST_DEVEL: $LSST_DEVEL"
 source $LSST_DIR/loadLSST.sh
 if [ $? != 0 ]; then
     echo "loadLSST.sh failed"
     exit 1
 fi
+print "After loadLSST.sh: LSST_HOME: $LSST_HOME  LSST_DEVEL: $LSST_DEVEL"
+
 pretty_execute lsstpkg $EXTRA_ARGS install $INSTALL_PACKAGE
 INSTALL_SUCCEEDED=$RETVAL
 if [ $INSTALL_SUCCEEDED != 0 ]; then

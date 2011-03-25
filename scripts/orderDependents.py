@@ -6,9 +6,10 @@ import sys
 import tempfile
 import  optparse 
 
-usage = "usage: %prog  [-s] PACKAGE\n where \n      -s: use setup packages to define dependency list\n       PACKAGE: eups module needing ordered dependency list\nExample: %prog afw\n         %prog -s datarel"
+usage = "usage: %prog  [-s]  [-t FILE] PACKAGE\n where \n      -s: use setup packages to define dependency list\n       -t FILE: temporary file needed for fast dependency collection\n        PACKAGE: eups module needing ordered dependency list\nExample: %prog afw\n         %prog -s datarel"
 parser = optparse.OptionParser( usage = usage )
 parser.add_option('-s', '--setup', dest='useSetup', help='+setup', action='store_true')
+parser.add_option('-t', '--temp', dest='filename', help='temporary file needed for fast dependency collection', action="store", type="string")
 
 (options, args) = parser.parse_args()
 if len(args) < 1:
@@ -20,13 +21,37 @@ else:
    useSetup = ""
 root_package = args[0]
 
-cmd = "eups list %s -D %s | sed -e \"s/| /||/g\" -e \"s/\\([a-zA-Z]\\)/ \\1/\" -e \"s/^/|/\" -e \"s/\\[.* //\" -e \"s/\\]//\"" % (useSetup, root_package)
+if options.filename:
+   tempName = options.filename 
+   useFastMethod = True
+else:
+   useFastMethod = False
 
-try:
-    f = os.popen(cmd)
-except:
-    print "Failed to execute: %s\n" % (cmd)
-    sys.exit(1)
+root_package = args[0]
+
+if useFastMethod:
+    # Alternate and faster method than 'eups list -D' to build dependency order.
+    # Need stderr from setup command; toss stdout
+    cmd = "setup -N -v %s  2> %s" %(root_package, tempName)
+    try:
+        os.popen(cmd)
+    except:
+        print "Failed to execute: %s\n" % (cmd)
+        sys.exit(1)
+
+    cmd = "cat %s | grep -v Unable | grep -v Product | sed -e \"s/Setting up: //\" -e \"s/ Flavor:.*Version://\" -e \"s/| /||/g\"  -e \"s/^/|/\" -e \"s/|\\([a-zA-Z]\\)/| \\1/\" " %(tempName)
+    try:
+        f = os.popen(cmd)
+    except:
+        print "Failed to execute: %s\n" % (cmd)
+        sys.exit(1)
+else:
+    cmd = "eups list %s -D %s | sed -e \"s/| /||/g\" -e \"s/\\([a-zA-Z]\\)/ \\1/\" -e \"s/^/|/\" -e \"s/\\[.* //\" -e \"s/\\]//\"" % (useSetup, root_package)
+    try:
+        f = os.popen(cmd)
+    except:
+        print "Failed to execute: %s\n" % (cmd)
+        sys.exit(1)
 
 levels= []
 packages = []

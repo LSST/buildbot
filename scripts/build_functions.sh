@@ -412,7 +412,7 @@ prepareSvnDir() {
 
     if [ "$1" = "" ]; then
         print "No package name for svn extraction. See LSST buildbot developer."
-        exit 1
+        RETVAL=1
     fi
 
     local SVN_PACKAGE=$1 
@@ -431,7 +431,7 @@ prepareSvnDir() {
     
     # if force, remove existing package
     if [ "$FORCE" -a -d $SVN_LOCAL_DIR ]; then
-        lookup_svn_revision $SVN_LOCAL_DIR
+        # lookup_svn_revision $SVN_LOCAL_DIR
         print "Remove existing $SVN_PACKAGE $REVISION"
         if [ `eups list $SVN_PACKAGE $REVISION | grep Setup | wc -l` = 1 ]; then
             unsetup -j $SVN_PACKAGE $REVISION
@@ -445,11 +445,11 @@ prepareSvnDir() {
         step "Check out $SVN_PACKAGE $REVISION from $SVN_URL"
         local SVN_COMMAND="svn checkout $SVN_URL $SVN_LOCAL_DIR "
         verbose_execute $SVN_COMMAND
-    else
-        step "Update $SVN_PACKAGE $REVISION from svn"
-        local SVN_COMMAND="svn update $SVN_LOCAL_DIR "
-        #quiet_execute $SVN_COMMAND
-        pretty_execute $SVN_COMMAND
+    #else    #removed since directory aleady in place.
+    #    step "Update $SVN_PACKAGE $REVISION from svn"
+    #    local SVN_COMMAND="svn update $SVN_LOCAL_DIR "
+    #    #quiet_execute $SVN_COMMAND
+    #    pretty_execute $SVN_COMMAND
     fi
     echo "Svn directory prepared"
 }
