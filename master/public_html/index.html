@@ -43,7 +43,8 @@ table { border-right: 1px solid #aaa; border-bottom: 1px solid #aaa }
   <li><a href="one_line_per_build">Recent build results</a> - summary of recent activity</li>
   <li><a href="buildslaves">Workers</a> - list of slave machines</li>
   <li><a href="changes">Version control monitoring</a></li>
-
+  <li><a href="http://dev.lsstcorp.org/trac/wiki/DM/buildbot/Daily_Status">Daily Status Commentary</a> Check to find out failure cause and what's being done.</li>
+  <li><a href="http://dev.lsstcorp.org/trac/wiki/DM/buildbot/Weekly_Production">Weekly_Production</a> More detailed status discussion on buildbot's Weekly Production Runs.</li>
   <br />
   <li><a href="about">About this Buildbot</a></li>
 </ul>
@@ -57,7 +58,7 @@ table { border-right: 1px solid #aaa; border-bottom: 1px solid #aaa }
   right, the first four columns' most recent tasks have succeeded, and the last two columns' have failed.
 </p>
 <p>
-  The waterfall's current columns, from left to right (last updated 2/23/2009):
+  The waterfall's current columns, from left to right (last updated 12/16/2010):
 </p>
 
 <table cellspacing=0>
@@ -134,6 +135,20 @@ table { border-right: 1px solid #aaa; border-bottom: 1px solid #aaa }
     <th>10.</th>
     <td>32-bit</td>
   </tr>
+  <tr>
+    <th>11.</th>
+    <td rowspan="2">Full Trunk vs Trunk</td>
+    <td rowspan="2">Fedora</td>
+    <td>64-bit</td>
+    <td rowspan="2"><tt> </tt></td>
+    <td rowspan="2" colspan="2">Build all trunk packages using trunk dependencies.</td>
+    <td rowspan="2">Nightly</td>
+<!--    <td rowspan="2">Test a fix if the from-scratch install failed, or try installing new package releases.</td> -->
+  </tr>
+  <tr>
+    <th>12.</th>
+    <td>32-bit</td>
+  </tr>
 </table>
 
 <h2>Terms</h2>
@@ -158,6 +173,11 @@ table { border-right: 1px solid #aaa; border-bottom: 1px solid #aaa }
         <di>
           <dt>current</dt>
           <dd>Simple enough: use the current versions of a package's dependencies, as listed in <a href="http://dev.lsstcorp.org/dmspkgs/current.list">current.list</a>.</dd>
+        </di>
+      </dl>
+        <di>
+          <dt>trunk</dt>
+          <dd>Build a trunk package against the trunk versions of all its dependencies.</dd>
         </di>
       </dl>
     </dd>
