@@ -25,6 +25,9 @@ usage() {
     echo "                    svn#### - svn revision ####"
     echo "                    arbitrary - any legitimate released version of a package"
 }
+
+DEBUG=debug
+
 source /lsst/DC3/stacks/default/loadLSST.sh
 source ${0%/*}/build_functions.sh
 
@@ -458,7 +461,7 @@ if [ $VERSION = "trunk" -a ! "$FAILED_INSTALL" ]; then
     step "Checking for failed tests"
     if [ -d tests ]; then
 	FAILED_COUNT=`find tests -name "*.failed" | wc -l`
-	if [ $FAILED_COUNT != "0" ]; then
+	if [ $FAILED_COUNT != 0 ]; then
 	    print "Some tests failed:"
 	    pretty_execute -anon 'find tests -name "*.failed"'
 	    # cat .failed files to stdout
@@ -490,13 +493,13 @@ if [ ! "$INCOMING_CHAIN" ]; then
     #pretty_execute "ls svn # before"
     step "Remove trunk packages"
     count_trunk_packages
-    while [ $TRUNK_PACKAGE_COUNT != "0" ]; do
+    while [ "$TRUNK_PACKAGE_COUNT" != "0" ]; do
 	PREV_COUNT=$TRUNK_PACKAGE_COUNT
 	remove_trunk_packages
 	count_trunk_packages
 	debug "Trunk package count = $TRUNK_PACKAGE_COUNT (previously $PREV_COUNT)"
 	#pretty_execute "ls svn # during"
-	if [ $TRUNK_PACKAGE_COUNT = $PREV_COUNT -a $TRUNK_PACKAGE_COUNT != "0" ]; then
+	if [ "$TRUNK_PACKAGE_COUNT" = "$PREV_COUNT" -a "$TRUNK_PACKAGE_COUNT" != "0" ]; then
 	    FAILED_INSTALL=true
 	    print "Failed to remove all trunk packages.  Some remain:"
 	    eups list | grep svn | grep -v LOCAL

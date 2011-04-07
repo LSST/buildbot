@@ -18,6 +18,8 @@ usage() {
     echo "    -name <name>: The name of this builder (used in email notifications)."
 }
 
+DEBUG=debug
+
 source /lsst/DC3/stacks/default/loadLSST.sh
 source ${0%/*}/build_functions.sh
 
