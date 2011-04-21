@@ -100,7 +100,7 @@ package_is_special() {
 # $3 = "FIND_DEVELOPER" then scan for last modifier of package
 # return: 0  
 
-TRUNK_VS_TRUNK=$BUILDERNAME
+TRUNK_VS_TRUNK=$BUILDER_NAME
 URL_TRUNK_VS_TRUNK="http://dev.lsstcorp.org/build/builders/$BUILDER_NAME/builds"
 emailFailure() {
     MAIL_TO="$2"
@@ -477,44 +477,46 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     #      - which USUALLY precedes target tests -see RHL for details
     scons_tests $CUR_PACKAGE
     if [ $DO_TESTS = 0  ] ; then
-        pretty_execute "scons -j 2 opt=3 install $SCONS_TESTS"
+        pretty_execute "scons -j 2 opt=3 install"
         if [ $RETVAL != 0 ]; then
-            print "Compile/Load with Test failed: $CUR_PACKAGE $REVISION"
+            print "Failure during Compile/Load/Install: $CUR_PACKAGE $REVISION"
             GOOD_BUILD=2
+        elif [ "$SCONS_TESTS" == "tests" ]; then
+            # Split scons into 2 separate commands since ctrl_events 
+            # and pex_logging tests sometimes fail with 
+            # 'scons -j 2 install test' when they don't fail when using 
+            # scons serially.
+            pretty_execute "scons opt=3 tests"
+            if [ -d tests ]; then
+                FAILED_COUNT=`eval "find tests -name \"*.failed\" $SKIP_THESE_TESTS | wc -l"`
+                if [ $FAILED_COUNT != 0 ]; then
+                    print "One or more required tests failed:"
+                    pretty_execute -anon 'find tests -name "*.failed"'
+                    # cat .failed files to stdout
+                    for FAILED_FILE in `find tests -name "*.failed"`; do
+                        pretty_execute "cat $FAILED_FILE"
+                    done
+                    print "Failure during Compile/Load/Install with-tests: $CUR_PACKAGE $REVISION"
+                    GOOD_BUILD=4
+                else
+                    print "Success during Compile/Load/Install with-tests: $CUR_PACKAGE $REVISION"
+                fi
+            else
+                print "No tests found in $CUR_PACKAGE"
+                print "Success during Compile/Load/Install with-tests: $CUR_PACKAGE $REVISION"
+            fi
         fi
     else
-        pretty_execute "scons -j 2 opt=3 python install"
+        pretty_execute "scons -j 2 opt=3 install python"
         if [ $RETVAL != 0 ]; then
-            print "Compile/Load with no-test failed: $CUR_PACKAGE $REVISION"
+            print "Failure of Compile/Load/Install with no-test: $CUR_PACKAGE $REVISION"
             GOOD_BUILD=1
+        else
+            print "Success of Compile/Load/Install with-no-test: scons -j 2 opt=3 install python"
         fi
     fi
   
-
-    if [ $GOOD_BUILD = 2 ]; then
-        # ----------------------------
-        # -- check for failed tests --
-        # ----------------------------
-        # but exclude known persistent test failures....
-        #      they should be removed from unit test suite
-
-        step "Checking for failed tests"
-        if [ -d tests ]; then
-            FAILED_COUNT=`eval "find tests -name \"*.failed\" $SKIP_THESE_TESTS | wc -l"`
-            if [ $FAILED_COUNT != 0 ]; then
-                print "One or more required tests failed:"
-                pretty_execute -anon 'find tests -name "*.failed"'
-                # cat .failed files to stdout
-                for FAILED_FILE in `find tests -name "*.failed"`; do
-                    pretty_execute "cat $FAILED_FILE"
-                done
-                GOOD_BUILD=4
-            fi
-        else
-            print "No tests found in $CUR_PACKAGE"
-        fi
-    fi
-    
+    print "GOOD_BUILD after test failure search: $GOOD_BUILD"
     # Archive log if explicitly requested on success and always on failure.
     #if [ "(" $GOOD_BUILD != 0 ")" -o "("  $LOG_SUCCESS = 0 ")" ]; then
     if [ $GOOD_BUILD != 0  ]; then
@@ -548,12 +550,17 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         else
             emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
         fi
+        print "Exiting since $CUR_PACKAGE failed to build successfully"
         exit 1
     fi
 
 
     # For production build, make each successful install to be EUPS-CURRENT
+    eups list -v  $CUR_PACKAGE
+    print "-------------------------"
     pretty_execute eups declare -c $CUR_PACKAGE $REVISION
+    print "-------------------------"
+    eups list -v $CUR_PACKAGE
 
 # -------------------------------------------------
 # -- Loop around to next entry in dependency list --
