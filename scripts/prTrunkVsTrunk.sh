@@ -100,9 +100,9 @@ package_is_special() {
 # $3 = "FIND_DEVELOPER" then scan for last modifier of package
 # return: 0  
 
-TRUNK_VS_TRUNK=$BUILDER_NAME
-URL_TRUNK_VS_TRUNK="http://dev.lsstcorp.org/build/builders/$BUILDER_NAME/builds"
 emailFailure() {
+    TRUNK_VS_TRUNK=$BUILDER_NAME
+    URL_TRUNK_VS_TRUNK="http://dev.lsstcorp.org/build/builders/$BUILDER_NAME/builds"
     MAIL_TO="$2"
     if [ "$3" = "FIND_DEVELOPER" ]; then
         # Determine last developer to modify the package
@@ -244,6 +244,7 @@ PACKAGE=$1
 print "PACKAGE: $PACKAGE"
 
 WORK_PWD=`pwd`
+rm -f $WORK_PWD/buildbot_FailedTests
 
 #Allow developers to access slave directory
 umask 002
@@ -494,32 +495,33 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
                     pretty_execute -anon 'find tests -name "*.failed"'
                     # cat .failed files to stdout
                     for FAILED_FILE in `find tests -name "*.failed"`; do
-                        pretty_execute "cat $FAILED_FILE"
+                        echo "================================================" > $WORK_PWD/buildbot_FailedTests
+                        echo "Failed unit test: $PWD/tests/$FAILED_FILE" >> $WORK_PWD/buildbot_FailedTests
+                        cat $FAILED_FILE >> $WORK_PWD/buildbot_FailedTests
+                        echo "================================================" >> $WORK_PWD/buildbot_FailedTests
                     done
-                    print "Failure during Compile/Load/Install with-tests: $CUR_PACKAGE $REVISION"
+                    print "Failure of unit tests for: $CUR_PACKAGE $REVISION"
                     GOOD_BUILD=4
                 else
-                    print "Success during Compile/Load/Install with-tests: $CUR_PACKAGE $REVISION"
+                    print "Success of unit tests for: $CUR_PACKAGE $REVISION"
                 fi
             else
-                print "No tests found in $CUR_PACKAGE"
-                print "Success during Compile/Load/Install with-tests: $CUR_PACKAGE $REVISION"
+                print "No tests found in $CUR_PACKAGE $REVISION"
             fi
         fi
     else
         pretty_execute "scons -j 2 opt=3 install python"
         if [ $RETVAL != 0 ]; then
-            print "Failure of Compile/Load/Install with no-test: $CUR_PACKAGE $REVISION"
+            echo "Failure during Compile/Load/Install -explicit no test: $CUR_PACKAGE $REVISION"
             GOOD_BUILD=1
         else
-            print "Success of Compile/Load/Install with-no-test: scons -j 2 opt=3 install python"
+            echo "Success of Compile/Load/Install -explicit no test: $CUR_PACKAGE $REVISION"
         fi
     fi
   
-    print "GOOD_BUILD after test failure search: $GOOD_BUILD"
+    print "GOOD_BUILD status after test failure search: $GOOD_BUILD"
     # Archive log if explicitly requested on success and always on failure.
-    #if [ "(" $GOOD_BUILD != 0 ")" -o "("  $LOG_SUCCESS = 0 ")" ]; then
-    if [ $GOOD_BUILD != 0  ]; then
+    if [ "$GOOD_BUILD" -ne "0"  ]; then
         # preserve config log 
         LOG_FILE="config.log"
         pretty_execute pwd
@@ -539,13 +541,13 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     cd $WORK_PWD
 
     # Time to exit due to build failure of a dependency
-    if [ $GOOD_BUILD != 0 ]; then
+    if [ "$GOOD_BUILD" -ne "0" -a "$GOOD_BUILD" -ne "4" ]; then
         # Get Email List for Package Owners (returned in $PACKAGE_OWNERS)
         fetch_package_owners $CUR_PACKAGE
 
         print "Installation of $CUR_PACKAGE $REVISION failed."
         print "Unable to build trunk-vs-trunk version of $PACKAGE due to failed build of dependency: $CUR_PACKAGE $REVISION ."
-        if [ "$CUR_PACKAGE" = "$PACKAGE" ]; then
+        if [ "$CUR_PACKAGE" -eq "$PACKAGE" ]; then
             emailFailure "$CUR_PACKAGE"  "$PACKAGE_OWNERS" "FIND_DEVELOPER"
         else
             emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
@@ -556,11 +558,10 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
 
 
     # For production build, make each successful install to be EUPS-CURRENT
-    eups list -v  $CUR_PACKAGE
     print "-------------------------"
     pretty_execute eups declare -c $CUR_PACKAGE $REVISION
-    print "-------------------------"
     eups list -v $CUR_PACKAGE
+    print "-------------------------"
 
 # -------------------------------------------------
 # -- Loop around to next entry in dependency list --
@@ -568,9 +569,19 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
 
 done < "$REAL_DEPS"
 
-if [ $DO_TESTS = 0 ]; then
-    print "Successfully built and tested trunk-vs-trunk version of $PACKAGE"
-else
-    print "Successfully built, but not tested, trunk-vs-trunk version of $PACKAGE"
+if [ "$GOOD_BUILD" -eq "4" -a -f "$WORK_PWD/buildbot_FailedTests" ]; then
+    echo "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+    echo "Following is the Cumulative Report of FAILED Unit Tests"
+    cat $WORK_PWD/buildbot_FailedTests
+    echo " "
+    echo "Preceding is the Cumulative Report of FAILED Unit Tests"
 fi
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "Successfully compiled trunk-vs-trunk version of $PACKAGE"
+
+#*************************************************************************
+#Last action...refresh the $LSST_DEVEL cache
+pretty_execute "eups admin  -Z $LSST_DEVEL clearCache"
+pretty_execute "eups admin  -Z $LSST_DEVEL buildCache"
+#*************************************************************************
 exit 0

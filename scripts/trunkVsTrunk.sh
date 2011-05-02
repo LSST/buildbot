@@ -100,9 +100,9 @@ package_is_special() {
 # $3 = "FIND_DEVELOPER" then scan for last modifier of package
 # return: 0  
 
-TRUNK_VS_TRUNK=$BUILDER_NAME
-URL_TRUNK_VS_TRUNK="http://dev.lsstcorp.org/build/builders/$BUILDER_NAME/builds"
 emailFailure() {
+    TRUNK_VS_TRUNK=$BUILDER_NAME
+    URL_TRUNK_VS_TRUNK="http://dev.lsstcorp.org/build/builders/$BUILDER_NAME/builds"
     MAIL_TO="$2"
     if [ "$3" = "FIND_DEVELOPER" ]; then
         # Determine last developer to modify the package
