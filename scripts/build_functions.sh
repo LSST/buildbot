@@ -452,4 +452,5 @@ prepareSvnDir() {
     #    pretty_execute $SVN_COMMAND
     fi
     echo "Svn directory prepared"
+    RETVAL=0
 }
