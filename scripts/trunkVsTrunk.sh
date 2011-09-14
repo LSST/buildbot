@@ -541,7 +541,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
 
         print "Installation of $CUR_PACKAGE $REVISION failed."
         print "Unable to build trunk-vs-trunk version of $PACKAGE due to failed build of dependency: $CUR_PACKAGE $REVISION ."
-        if [ "$CUR_PACKAGE" -eq "$PACKAGE" ]; then
+        if [ "$CUR_PACKAGE" == "$PACKAGE" ]; then
             emailFailure "$CUR_PACKAGE"  "$PACKAGE_OWNERS" "FIND_DEVELOPER"
         else
             emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
