@@ -84,7 +84,6 @@ package_is_special() {
         -o $SPCL_PACKAGE = "ssd"  \
         -o $SPCL_PACKAGE = "mpfr"  \
         -o ${SPCL_PACKAGE:0:6} = "condor"  \
-        -o $SPCL_PACKAGE = "ip_diffim"  \
         -o $SPCL_PACKAGE = "base"  \
         -o ${SPCL_PACKAGE:0:5} = "mops_"  \
         -o ${SPCL_PACKAGE:0:4} = "lsst" ]; then 
