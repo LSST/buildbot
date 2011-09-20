@@ -479,7 +479,8 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     if [ $RETVAL != 0 ]; then
         print "Failure of Build/Load: $CUR_PACKAGE $REVISION"
         BUILD_STATUS=2
-    elif [ $DO_TESTS = 0 -a "$SCONS_TESTS" = "tests" -a -d tests ]; then 
+    fi
+    if [ "$SCONS_TESTS" = "tests" -a -d tests ]; then 
         # Built libs OK, want Tests built and run
         pretty_execute "scons -j 2 opt=3 tests"
         FAILED_COUNT=`eval "find tests -name \"*.failed\" $SKIP_THESE_TESTS | wc -l"`
@@ -499,26 +500,21 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
             done
             print "Failure of 'tests' Build/Run for $CUR_PACKAGE $REVISION"
             BUILD_STATUS=4
-        else   # Built libs OK, ran tests OK, now eups-install
-            pretty_execute "scons opt=3 install current declare python"
-            if [ $RETVAL != 0 ]; then
-                print "Failure of install: $CUR_PACKAGE $REVISION"
-                BUILD_STATUS=3
-            fi
-            print "Success of Compile/Load/Test/Install: $CUR_PACKAGE $REVISION"
         fi
-    else  # Built libs OK, no tests wanted|available, now eups-install
+    fi
+    # Built libs OK, result of testing doesn't matter, now eups-install
+    if [ $BUILD_STATUS != 2 ]; then  
             pretty_execute "scons opt=3 install current declare python"
             if [ $RETVAL != 0 ]; then
                 print "Failure of install: $CUR_PACKAGE $REVISION"
                 BUILD_STATUS=1
+            else
+                print "Success of Compile/Load/Install: $CUR_PACKAGE $REVISION"
             fi
-            print "Success during Compile/Load/Install with-tests: $CUR_PACKAGE $REVISION"
     fi
 
-    print "BUILD_STATUS status after test failure search: $BUILD_STATUS"
     # Archive log if explicitly requested on success and always on failure.
-    if [ "$BUILD_STATUS" -ne "0" ]; then
+    if [ $BUILD_STATUS != 0 ]; then
         # preserve config log 
         LOG_FILE="config.log"
         pretty_execute pwd
@@ -537,14 +533,14 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     # --               later, possibly 'rm' source directory --
     cd $WORK_PWD
 
-    # Time to exit due to build failure of a dependency
-    if [ "$BUILD_STATUS" -ne "0" -a "$BUILD_STATUS" -ne "4" ]; then
+    # Exit due to compile (2) or install (1) failure of a dependency
+    if [ $BUILD_STATUS = 1 -o $BUILD_STATUS = 2 ]; then
         # Get Email List for Package Owners (returned in $PACKAGE_OWNERS)
         fetch_package_owners $CUR_PACKAGE
 
         print "Installation of $CUR_PACKAGE $REVISION failed."
-        print "Unable to build trunk-vs-trunk version of $PACKAGE due to failed build of dependency: $CUR_PACKAGE $REVISION ."
-        if [ "$CUR_PACKAGE" == "$PACKAGE" ]; then
+        print "Unable to build trunk-vs-trunk version of $PACKAGE due to failed compile or eups-install of dependency: $CUR_PACKAGE $REVISION ."
+        if [ "$CUR_PACKAGE" = "$PACKAGE" ]; then
             emailFailure "$CUR_PACKAGE"  "$PACKAGE_OWNERS" "FIND_DEVELOPER"
         else
             emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
@@ -556,7 +552,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         if [ "`eups list $CUR_PACKAGE $REVISION -c`" != "" ]; then
             pretty_execute "eups undeclare -c $CUR_PACKAGE $REVISION"
         fi
-        print "Exiting since $CUR_PACKAGE failed to build/install successfully"
+        print "Exiting since $CUR_PACKAGE failed to compile/install successfully"
         exit 1
     fi
 
