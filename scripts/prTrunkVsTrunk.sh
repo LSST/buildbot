@@ -2,6 +2,7 @@
 # install a requested package from version control, and recursively
 # ensure that its minimal dependencies are installed likewise
 
+LSST_STACK="/lsst/DC3/stacks/gcc445-RH6/14sept2011/"
 
 #--------------------------------------------------------------------------
 usage() {
@@ -136,7 +137,7 @@ emailFailure() {
     printf "\
 from: \"Buildbot\" <$BUCK_STOPS_HERE>\n\
 subject: $EMAIL_SUBJECT\n\
-to: \"Roberta Allsman\" <rallsman@lsst.org>\n\
+to: \"Steve Pietrowicz\" <srp@ncsa.uiuc.edu>\n\
 cc: $BUCK_STOPS_HERE\n\n" >> email_body.txt
     printf "\
 A build of the trunk version of \"$1\" failed, against trunk versions of its dependencies.\n\n\
@@ -214,10 +215,10 @@ if [ "$1" = "-build_number" ]; then
 fi
 
 if [ "$1" = "-slave_devel" ]; then
-    export LSST_DEVEL="$PWD/buildbotSandbox"
-    shift 1
+    export LSST_DEVEL=$2
+    shift 2
 else
-    export LSST_DEVEL="$HOME/buildbotSandbox"
+    echo "Missing argument -slave_devel must be specified"
 fi
 if [ ! -d $LSST_DEVEL ] ; then
     print "LSST_DEVEL: $LSST_DEVEL does not exist; contact the LSST buildbot guru."
@@ -238,6 +239,13 @@ else
     DO_TESTS=0
 fi
 
+if [ "$1" = "-parallel" ]; then
+    PARALLEL=$2
+    shift 2
+else
+    PARALLEL=2
+fi
+
 PACKAGE=$1
 
 print "PACKAGE: $PACKAGE"
@@ -248,7 +256,7 @@ rm -f $WORK_PWD/buildbot_FailedTests
 #Allow developers to access slave directory
 umask 002
 
-source /lsst/DC3/stacks/default/loadLSST.sh
+source $LSST_STACK"/loadLSST.sh"
 
 #*************************************************************************
 #First action...clear the $LSST_DEVEL cache

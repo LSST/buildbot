@@ -1,7 +1,7 @@
 #==============================================================
 # Set a global used for error messages to the buildbot guru
 #==============================================================
-BUCK_STOPS_HERE="rallsman@lsst.org"
+BUCK_STOPS_HERE="srp@ncsa.uiuc.edu"
 
 
 #---------------------------------------------------------------------------

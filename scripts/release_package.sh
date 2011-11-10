@@ -8,7 +8,7 @@ unset LSST_DEVEL
 
 if [[ $1 == "" ]]
 then
-    echo "usage: $0 [-lsstdir dir] [-no_doxygen] [--tag=current] package [packages to check]"
+    echo "usage: $0 [-lsstdir dir] [-lsstdevel dir] [-no_doxygen] [--tag=current] [-astrometry_net_data data data_dir] package [packages to check]"
     exit 1
 fi
 
@@ -31,6 +31,12 @@ else
     export LSST_HOME=`pwd`
 fi
 
+if [ "$1" = "-lsstdevel" ]; then
+    LSST_SANDOX=$2
+    export LSST_DEVEL=$LSST_SANDOX
+    shift 2
+fi
+
 if [ "$1" = "-no_doxygen" ]; then
     echo "----- not copying doxygen -----"
     NO_DOXYGEN="true"
@@ -40,6 +46,16 @@ fi
 if [ "$1" = "--tag=current" ]; then
     EXTRA_ARGS=$1;
     shift
+fi
+
+ASTROMETRY_NET_DATA=""
+echo "1 ==> "$1
+if [ "$1" = "-astrometry_net_data" ]; then
+	ASTROMETRY_NET_DATA=$2
+	ASTROMETRY_NET_DATA_DIR=$3
+	shift
+	shift
+	shift
 fi
 
 INSTALL_PACKAGE=$1
@@ -53,6 +69,10 @@ if [ $? != 0 ]; then
     exit 1
 fi
 print "After loadLSST.sh: LSST_HOME: $LSST_HOME  LSST_DEVEL: $LSST_DEVEL"
+
+if [ "$ASTROMETRY_NET_DATA" ]; then
+	eups declare astrometry_net_data $ASTROMETRY_NET_DATA -r $ASTROMETRY_NET_DATA_DIR
+fi
 
 pretty_execute lsstpkg $EXTRA_ARGS install $INSTALL_PACKAGE
 INSTALL_SUCCEEDED=$RETVAL

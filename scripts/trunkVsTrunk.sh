@@ -2,6 +2,8 @@
 # install a requested package from version control, and recursively
 # ensure that its minimal dependencies are installed likewise
 
+LSST_STACK=/lsst/DC3/stacks/gcc445-RH6/14sept2011
+
 
 #--------------------------------------------------------------------------
 usage() {
@@ -20,10 +22,11 @@ usage() {
     echo "                          eg \"http://master/logs/\""
     echo "    -builddir <instance>: identifies slave instance at \"slave/<name>\""
     echo "  -build_number <number>: buildbot's build number assigned to run"
-    echo "           -slave_devel : if set, LSST_DEVEL= $PWD/buildbotSandbox"
-    echo "                          else, LSST_DEVEL=$HOME/buildbotSandbox"
+    echo "    -slave_devel <path> : LSST_DEVEL=<path>"
     echo "             -production: setting up stack for production run"
     echo "               -no_tests: only build package, don't run tests"
+    echo "       -parallel <count>: if set, parallel builds set to <count>"
+    echo "                          else, parallel builds count set to 2."
     echo " where $PWD is location of slave's work directory"
 }
 #--------------------------------------------------------------------------
@@ -137,9 +140,9 @@ emailFailure() {
     printf "\
 from: \"Buildbot\" <$BUCK_STOPS_HERE>\n\
 subject: $EMAIL_SUBJECT\n\
-to: \"Roberta Allsman\" <rallsman@lsst.org>\n\
-cc: $BUCK_STOPS_HERE\n\n" >> email_body.txt
+to: \"Stephen Pietrowicz\" <srp@ncsa.uiuc.edu>\n" >>email_body.txt
     printf "\
+Would have sent to cc: $BUCK_STOPS_HERE\n\n\
 A build of the trunk version of \"$1\" failed, against trunk versions of its dependencies.\n\n\
 You were notified because you are either the package's owner or its last modifier.\n\n\
 The $PACKAGE failure log is available at: ${URL_TRUNK_VS_TRUNK}/${BUILD_NUMBER}/steps/$PACKAGE/logs/stdio\n\
@@ -215,10 +218,11 @@ if [ "$1" = "-build_number" ]; then
 fi
 
 if [ "$1" = "-slave_devel" ]; then
-    export LSST_DEVEL="$PWD/buildbotSandbox"
-    shift 1
+    export LSST_DEVEL=$2
+    shift 2
 else
-    export LSST_DEVEL="$HOME/buildbotSandbox"
+    echo "Missing argument -slave_devel must be specified"
+    exit 1
 fi
 if [ ! -d $LSST_DEVEL ] ; then
     print "LSST_DEVEL: $LSST_DEVEL does not exist; contact the LSST buildbot guru."
@@ -239,6 +243,13 @@ else
     DO_TESTS=0
 fi
 
+if [ "$1" = "-parallel" ]; then
+    PARALLEL=$2
+    shift 2
+else
+    PARALLEL=2
+fi
+
 PACKAGE=$1
 
 print "PACKAGE: $PACKAGE"
@@ -248,7 +259,7 @@ WORK_PWD=`pwd`
 #Allow developers to access slave directory
 umask 002
 
-source /lsst/DC3/stacks/default/loadLSST.sh
+source $LSST_STACK"/loadLSST.sh"
 
 #*************************************************************************
 #First action...clear the $LSST_DEVEL cache
@@ -475,13 +486,17 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
 
     # build libs; then build tests; then install.
     scons_tests $CUR_PACKAGE
-    pretty_execute "scons -j 2 opt=3 python"
+    pretty_execute "scons -j $PARALLEL opt=3 python"
     if [ $RETVAL != 0 ]; then
         print "Failure of Build/Load: $CUR_PACKAGE $REVISION"
         BUILD_STATUS=2
     elif [ $DO_TESTS = 0 -a "$SCONS_TESTS" = "tests" -a -d tests ]; then 
         # Built libs OK, want Tests built and run
-        pretty_execute "scons -j 2 opt=3 tests"
+	# don't run these in parallel, because some tests depend on other
+	# binaries to be built, and there's a race condition that will cause
+	# the tests to fail if they're not built before the test is run.
+        #pretty_execute "scons -j 2 opt=3 tests"
+        pretty_execute "scons opt=3 tests"
         FAILED_COUNT=`eval "find tests -name \"*.failed\" $SKIP_THESE_TESTS | wc -l"`
         if [ $FAILED_COUNT != 0 ]; then
             print "One or more required tests failed:"
@@ -489,7 +504,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
             # cat .failed files to stdout
             for FAILED_FILE in `find tests -name "*.failed"`; do
                 echo "================================================" 
-                echo "Failed unit test: $PWD/tests/$FAILED_FILE" 
+                echo "Failed unit test: $PWD/$FAILED_FILE" 
                 cat $FAILED_FILE
                 echo "================================================"
             done
