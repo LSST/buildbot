@@ -1,0 +1,9 @@
+
+# /master/
+/master/twistd.log*
+/master/twistd.pid
+/master/triggered*
+/master/lsst_install*
+/master/trunk_install*
+/master/changes.pck
+/master/trunk_current
