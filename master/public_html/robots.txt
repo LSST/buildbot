@@ -1,9 +1,0 @@
-User-agent: *
-Disallow: /build/waterfall
-Disallow: /build/builders
-Disallow: /build/changes
-Disallow: /build/buildslaves
-Disallow: /build/schedulers
-Disallow: /build/one_line_per_build
-Disallow: /build/one_box_per_builder
-Disallow: /build/xmlrpc

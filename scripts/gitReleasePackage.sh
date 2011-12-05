@@ -8,7 +8,7 @@ unset LSST_DEVEL
 
 if [[ $1 == "" ]]
 then
-    echo "usage: $0 [-lsstdir dir] [-lsstdevel dir] [-no_doxygen] [--tag=current] [-astrometry_net_data data data_dir] package [packages to check]"
+    echo "usage: $0 [-lsstdir dir]  [-no_doxygen] [--tag=current] [-astrometry_net_data data data_dir] package [packages to check]"
     exit 1
 fi
 
@@ -29,12 +29,6 @@ then
 else
     LSST_DIR="."
     export LSST_HOME=`pwd`
-fi
-
-if [ "$1" = "-lsstdevel" ]; then
-    LSST_SANDOX=$2
-    export LSST_DEVEL=$LSST_SANDOX
-    shift 2
 fi
 
 if [ "$1" = "-no_doxygen" ]; then
@@ -74,7 +68,7 @@ if [ "$ASTROMETRY_NET_DATA" ]; then
 	eups declare astrometry_net_data $ASTROMETRY_NET_DATA -r $ASTROMETRY_NET_DATA_DIR
 fi
 
-pretty_execute lsstpkg $EXTRA_ARGS install $INSTALL_PACKAGE
+pretty_execute lsstpkg install $EXTRA_ARGS $INSTALL_PACKAGE
 INSTALL_SUCCEEDED=$RETVAL
 if [ $INSTALL_SUCCEEDED != 0 ]; then
     echo "install $INSTALL_PACKAGE failed"
@@ -91,10 +85,10 @@ if [ $INSTALL_SUCCEEDED == 0 ]; then
     step "Check for installed packages"
     for CHECK_PACKAGE in $@
       do
-      if [ $CHECK_PACKAGE != "LSSTPipe" ]; then # a phantom package
+      if [ $CHECK_PACKAGE != "lsstarchive" ]; then # a phantom package
 	  PACKAGE_COUNT=`eups list $CHECK_PACKAGE | wc -l`
 	  if [ $PACKAGE_COUNT = "1" ]; then
-	      echo "  - Package '$CHECK_PACKAGE' is present."
+	      echo "  - Package '$CHECK_PACKAGE' is installed."
 	  elif [ $PACKAGE_COUNT = "0" ]; then
 	      echo "  - Package '$CHECK_PACKAGE' is not installed:";
 	      eups list

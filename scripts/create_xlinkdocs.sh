@@ -18,15 +18,18 @@ check1() {
     fi
 }
 
-source /lsst/DC3/stacks/default/loadLSST.sh
+source $LSST_HOME/loadLSST.sh
+#source /usr/local/home/buildbot/buildslave/Release/work/loadLSST.sh
 
 source ${0%/*}/build_functions.sh
 
 DEBUG=debug
 DEV_SERVER="lsstdev.ncsa.uiuc.edu"
 SVN_SERVER="svn.lsstcorp.org"
-WEB_HOST="willy.ncsa.illinois.edu"
-WEB_ROOT="/var/www/html/doxygen"
+#WEB_HOST="willy.ncsa.illinois.edu"
+#WEB_ROOT="/var/www/html/doxygen"
+WEB_HOST="lsst-build.ncsa.illinois.edu"
+WEB_ROOT="/usr/local/home/buildbot/www/"
 
 # -------------------
 # -- get arguments --
@@ -104,7 +107,7 @@ OLD_DOXY_DOC_DIR=`ssh $REMOTE_HOST "if [ -s $REMOTE_DIR/$SYM_LINK ]; then ls -l 
 echo "Old DoxyDir: $OLD_DOXY_DOC_DIR"
 
 # symlink the default xlinkdoxy name to new directory.
-ssh $REMOTE_HOST "rm $REMOTE_DIR/$SYM_LINK; ln -s $REMOTE_DIR/$DOC_DIR $REMOTE_DIR/$SYM_LINK"
+ssh $REMOTE_HOST "rm -f $REMOTE_DIR/$SYM_LINK; ln -s $REMOTE_DIR/$DOC_DIR $REMOTE_DIR/$SYM_LINK"
 if [ $? != 0 ]; then
     echo "Failed to symlink: $SYM_LINK, to new doxygen documentation: $DOC_DIR"
     exit 1
@@ -112,7 +115,8 @@ fi
 echo "Updated symlink: $SYM_LINK, to point to new doxygen documentation: $DOC_DIR."
 
 # OK, time to remove the old document directory
-ssh $REMOTE_HOST "if [ -d $OLD_DOXY_DOC_DIR ] ; then rm -r $OLD_DOXY_DOC_DIR; fi"
+#ssh $REMOTE_HOST "if [ -d $OLD_DOXY_DOC_DIR ] ; then rm -r $OLD_DOXY_DOC_DIR; fi"
+ssh $REMOTE_HOST "rm -fr $OLD_DOXY_DOC_DIR"
 if [ $? != 0 ]; then
     echo "Failed to remove the previous doxy directory: $OLD_DOXY_DOC_DIR"
     exit 1

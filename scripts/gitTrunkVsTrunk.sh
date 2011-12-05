@@ -2,7 +2,10 @@
 # install a requested package from version control, and recursively
 # ensure that its minimal dependencies are installed likewise
 
-LSST_STACK=/lsst/DC3/stacks/gcc445-RH6/15nov2011
+#LSST_STACK=/lsst/DC3/stacks/gcc445-RH6/15nov2011
+#LSST_STACK=/lsst/home/buildbot/RHEL6/gitwork/stacks/gcc-445/18nov2011
+#LSST_STACK=/lsst/DC3/stacks/RH6
+LSST_STACK=/lsst/DC3/stacks/gcc445-RH6/28nov2011
 
 
 #--------------------------------------------------------------------------
@@ -33,10 +36,10 @@ usage() {
 
 DEBUG=debug
 DEV_SERVER="lsstdev.ncsa.uiuc.edu"
-SVN_SERVER="svn.lsstcorp.org"
+SCM_SERVER="git.lsstcorp.org"
 WEB_ROOT="/var/www/html/doxygen"
 
-source ${0%/*}/prBuildFunctions.sh
+source ${0%/*}/gitBuildFunctions.sh
 
 #Exclude known persistent test failures until they are fixed or removed
 #   Code Developer should install into tests/SConscript:
@@ -53,7 +56,7 @@ SKIP_THESE_TESTS=""
 #--------------------------------------------------------------------------
 # -- Alter eups name not corresponding to directory path convention --
 # $1 = eups package name
-# return ADJUSTED_NAME in LSST standard so its svn directory name is derived OK
+# return ADJUSTED_NAME in LSST standard so its SCM directory name is derived OK
 adjustBadEupsName() {
     #  A little adjustment of bad package naming:  
     #  at the moment, only one:  mops -> mops_nightmops
@@ -76,7 +79,10 @@ package_is_special() {
     fi
     local SPCL_PACKAGE="$1"
 
+    # 23 Nov 2011 installed toolchain since it's not in active.list, 
+    #             required by tcltk but not an lsstpkg distrib package.
     if [ ${SPCL_PACKAGE:0:5} = "scons" \
+        -o ${SPCL_PACKAGE} = "toolchain"  \
         -o ${SPCL_PACKAGE:0:7} = "devenv_"  \
         -o $SPCL_PACKAGE = "gcc"  \
         -o $SPCL_PACKAGE = "afwdata" \
@@ -99,155 +105,154 @@ package_is_special() {
 #--------------------------------------------------------------------------
 # -- On Failure, email appropriate notice to proper recipient(s)
 # $1 = package
-# $2 = recipients
-# $3 = "FIND_DEVELOPER" then scan for last modifier of package
+# $2 = version
+# $3 = recipients  (May have embedded blanks)
+#      Note BLAME details are fetched at point of failure and ready for use
+#           FAIL_MSG is also set prior to invocation
 # return: 0  
 
 emailFailure() {
-    TRUNK_VS_TRUNK=$BUILDER_NAME
-    URL_TRUNK_VS_TRUNK="http://dev.lsstcorp.org/build/builders/$BUILDER_NAME/builds"
-    MAIL_TO="$2"
-    if [ "$3" = "FIND_DEVELOPER" ]; then
-        # Determine last developer to modify the package
-        local LAST_MODIFIER=`svn info $SVN_LOCAL_DIR | grep 'Last Changed Author: ' | sed -e "s/Last Changed Author: //"`
-    
-        # Is LAST_MODIFIER already in the list of PACKAGE_OWNERS (aka $2)?
-        local OVERLAP=`echo ${2}  | sed -e "s/.*${LAST_MODIFIER}.*/FOUND/"`
-        unset DEVELOPER
-        if [ "$OVERLAP" != "FOUND" ]; then
-            local url="$PACKAGE_OWNERS_URL?format=txt"
-            DEVELOPER=`curl -s $url | grep "sv ${LAST_MODIFIER}" | sed -e "s/sv ${LAST_MODIFIER}://" -e "s/ from /@/g"`
-            if [ ! "$DEVELOPER" ]; then
-                DEVELOPER=$BUCK_STOPS_HERE
-                print "*** Error: did not find last modifying developer of ${LAST_MODIFIER} in $url"
-                print "*** Expected \"sv <user>: <name> from <somewhere.dom>\""
-            fi
-    
-            print "$BUCK_STOPS_HERE will send build failure notification to $2 and $DEVELOPER"
-            MAIL_TO="$2, $DEVELOPER"
-        else
-            print "$BUCK_STOPS_HERE will send build failure notification to $2"
-        fi
-    fi
+    local emailPackage=$1; shift
+    local emailVersion=$2; shift
+    local emailRecipients=$*;
 
-    EMAIL_SUBJECT="LSST automated build failure: $1 trunk in $TRUNK_VS_TRUNK"
+    if [ "$BLAME_EMAIL" != "" ] ; then
+        MAIL_TO="$emailRecipients, $BLAME_EMAIL"
+    else
+        MAIL_TO="$emailRecipients"
+    fi
+    #URL_MASTER_BUILD="http://dev.lsstcorp.org/build/builders/$BUILDER_NAME/builds"
+    URL_MASTER_BUILD="http://lsst-build.ncsa.illinois.edu:8010/builders/$BUILDER_NAME/builds"
+    EMAIL_SUBJECT="LSST automated build failure: package $emailPackage in $BUILDER_NAME"
+
+    [[ "$DEBUG" ]] && print "TO: $MAIL_TO; Subject: $EMAIL_SUBJECT; $BUILDER_NAME"
 
     rm -f email_body.txt
-##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
-# Replace following in next command when debugged AND fix up print statements in above block
-#to: $MAIL_TO\n\
-##_#_#_#_#_#_#_#_#_#_#_##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
     printf "\
 from: \"Buildbot\" <$BUCK_STOPS_HERE>\n\
 subject: $EMAIL_SUBJECT\n\
-to: \"Stephen Pietrowicz\" <srp@ncsa.uiuc.edu>\n" >>email_body.txt
-    printf "\
-Would have sent to cc: $BUCK_STOPS_HERE\n\n\
-A build of the trunk version of \"$1\" failed, against trunk versions of its dependencies.\n\n\
+to: \"Godzilla\" <robyn@lsst.org>\n\
+cc: \"Mothra\" <$BUCK_STOPS_HERE>\n" \
+>> email_body.txt
+#to: \"Godzilla\" <robyn@lsst.org>\n" \
+# REPLACE 'TO:' LINE WITH & add trailing slash       to: $MAIL_TO\n
+# ADD TO ABOVE WHEN IT"S TIME & add trailing slash   cc: $BUCK_STOPS_HERE\n\n
+
+    # Following is if error is failure in Compilation/Test/Build
+    if  [ "$BLAME_EMAIL" != "" ] ; then
+        printf "\
+$FAIL_MSG\n\n\
 You were notified because you are either the package's owner or its last modifier.\n\n\
-The $PACKAGE failure log is available at: ${URL_TRUNK_VS_TRUNK}/${BUILD_NUMBER}/steps/$PACKAGE/logs/stdio\n\
-The Continuous Integration build log is available at: ${URL_TRUNK_VS_TRUNK}/${BUILD_NUMBER}\n" >> email_body.txt
-    printf "\
-Until next Monday, the build directories will be available for copy from: fbot.ncsa.illinois.edu:$WORK_PWD/svn/\n\n\
-svn info:\n" >> email_body.txt
-    svn_info $SVN_LOCAL_DIR ">> email_body.txt"
+The $PACKAGE failure log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}/steps/$PACKAGE/logs/stdio\n\
+The Continuous Integration build log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}\n \
+Change info:\n" \
+>> email_body.txt
+        cat $BLAME_TMPFILE \
+>> email_body.txt
+    else  # For Non-Compilation/Test/Build failures directed to BUCK_STOPS_HERE
+        printf "\
+An build/installation of package \"$emailPackage\" (version: \"$emailVersion\") failed\n\n\
+You were notified because you are Buildbot's nanny.\n\n\
+$FAIL_MSG\n\n\
+The $PACKAGE failure log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}/steps/$PACKAGE/logs/stdio\n"\
+>> email_body.txt
+    fi
+
     printf "\
 \n--------------------------------------------------\n\
 Sent by LSST buildbot running on `hostname -f`\n\
-Questions?  Contact $BUCK_STOPS_HERE \n" >> email_body.txt
+Questions?  Contact $BUCK_STOPS_HERE \n" \
+>> email_body.txt
 
     /usr/sbin/sendmail -t < email_body.txt
-##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
-# Uncomment the next command  when ready to send to developers
-##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
-    #cat email_body.txt | mail -c "$BUCK_STOPS_HERE" -s "$EMAIL_SUBJECT" "$EMAIL_RECIPIENT"
     rm email_body.txt
+###_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+## Uncomment the next command  when ready to send to developers
+###_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#    #cat email_body.txt | mail -c "$BUCK_STOPS_HERE" -s "$EMAIL_SUBJECT" "$EMAIL_RECIPIENT"
 }
+
+###_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#                 Might want to reuse following to avoid duplicate emails
+###_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#emailFailure() {
+#    if [ "$3" = "FETCH_BLAME" ]; then
+#        # Determine last developer to modify the package
+#        local LAST_MODIFIER=`svn info $SCM_LOCAL_DIR | grep 'Last Changed Author: ' | sed -e "s/Last Changed Author: //"`
+#    
+#        # Is LAST_MODIFIER already in the list of PACKAGE_OWNERS (aka $emailVersion)?
+#        local OVERLAP=`echo ${2}  | sed -e "s/.*${LAST_MODIFIER}.*/FOUND/"`
+#        unset DEVELOPER
+#        if [ "$OVERLAP" != "FOUND" ]; then
+#            local url="$PACKAGE_OWNERS_URL?format=txt"
+#            DEVELOPER=`curl -s $url | grep "sv ${LAST_MODIFIER}" | sed -e "s/sv ${LAST_MODIFIER}://" -e "s/ from /@/g"`
+#            if [ ! "$DEVELOPER" ]; then
+#                DEVELOPER=$BUCK_STOPS_HERE
+#                print "*** Error: did not find last modifying developer of ${LAST_MODIFIER} in $url"
+#                print "*** Expected \"sv <user>: <name> from <somewhere.dom>\""
+#            fi
+#    
+#            print "$BUCK_STOPS_HERE will send build failure notification to $2 and $DEVELOPER"
+#            MAIL_TO="$2, $DEVELOPER"
+#        else
+#            print "$BUCK_STOPS_HERE will send build failure notification to $2"
+#        fi
+#    fi
+###_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
 #--------------------------------------------------------------------------
 
 # -------------------
 # -- get arguments --
 # -------------------
 
-if [ "$1" = "-verbose" -o "$1" = "-debug" ]; then
-    VERBOSE=true
-    shift
-fi
-if [ "$1" = "-force" ]; then
-    FORCE=true
-    shift
-fi
-if [ ! "$1" ]; then
-    usage
-    exit 1
-fi
+options=$(getopt -l verbose,boot,force,dont_log_success,log_dest:,log_url:,builder_name:,build_number:,slave_devel:,production,no_tests,parallel:,package: -- "$@")
 
-if [ "$1" = "-dont_log_success" ]; then
-    LOG_SUCCESS=1
-    shift
-else
-    LOG_SUCCESS=0
-fi
-
-if [ "$1" = "-log_dest" ]; then
-    LOG_ARGS="$LOG_ARGS $1 $2"
-    LOG_DEST=$2
-    LOG_DEST_HOST=${LOG_DEST%%\:*} # buildbot@master
-    LOG_DEST_DIR=${LOG_DEST##*\:}  # /var/www/html/logs
-    shift 2
-fi
-
-if [ "$1" = "-log_url" ]; then
-    LOG_ARGS="$LOG_ARGS $1 $2"
-    LOG_URL=$2
-    shift 2
-fi
-
+LOG_SUCCESS=0
 BUILDER_NAME=""
-if [ "$1" = "-builder_name" ]; then
-    BUILDER_NAME=$2
-    print "BUILDER_NAME: $BUILDER_NAME"
-    shift 2
-fi
-
 BUILD_NUMBER=0
-if [ "$1" = "-build_number" ]; then
-    BUILD_NUMBER=$2
-    shift 2
-    print "BUILD_NUMBER: $BUILD_NUMBER"
-fi
+PRODUCTION_RUN=1
+DO_TESTS=0
+SLAVE_DEVEL="xyzzy"
+while true
+do
+    case $1 in
+        --verbose) VERBOSE=true; shift;;
+        --debug) VERBOSE=true; shift;;
+        --force) FORCE=true; shift;;
+        --dont_log_success) LOG_SUCCESS=1; shift;;
+        --log_dest) 
+                LOG_DEST=$2; 
+                LOG_DEST_HOST=${LOG_DEST%%\:*}; # buildbot@master
+                LOG_DEST_DIR=${LOG_DEST##*\:};  # /var/www/html/logs
+                shift 2;;
+        --log_url) LOG_URL=$2; shift 2;;
+        --builder_name)
+                BUILDER_NAME=$2; 
+                print "BUILDER_NAME: $BUILDER_NAME"
+                shift 2;;
+        --build_number)
+                BUILDER_NUMBER=$2;
+                print "BUILDER_NUMBER: $BUILDER_NUMBER"
+                shift 2;;
+        --slave_devel) SLAVE_DEVEL=$2; shift 2;;
+        --production) PRODUCTION_RUN=0; shift 1;;
+        --no_tests) DO_TESTS=1; shift 1;;
+        --parallel) PARALLEL=$2; shift 2;;
+        --package) PACKAGE=$2; shift 2;;
+        *) echo "parsed options; arguments left are: $*"
+             break;;
+    esac
+done
 
-if [ "$1" = "-slave_devel" ]; then
-    export LSST_DEVEL=$2
-    shift 2
-else
-    echo "Missing argument -slave_devel must be specified"
+echo "SLAVE_DEVEL = $SLAVE_DEVEL"
+if [ "$SLAVE_DEVEL" = "xyzzy" ]; then
+    echo "Missing argument --slave_devel must be specified"
     exit 1
 fi
+
 if [ ! -d $LSST_DEVEL ] ; then
     print "LSST_DEVEL: $LSST_DEVEL does not exist; contact the LSST buildbot guru."
     exit 1
-fi
-
-if [ "$1" = "-production" ]; then
-    PRODUCTION_RUN=0
-    shift 1
-else
-    PRODUCTION_RUN=1
-fi
-
-if [ "$1" = "-no_tests" ]; then
-    DO_TESTS=1
-    shift 1
-else
-    DO_TESTS=0
-fi
-
-if [ "$1" = "-parallel" ]; then
-    PARALLEL=$2
-    shift 2
-else
-    PARALLEL=2
 fi
 
 PACKAGE=$1
@@ -262,9 +267,9 @@ umask 002
 source $LSST_STACK"/loadLSST.sh"
 
 #*************************************************************************
-#First action...clear the $LSST_DEVEL cache
-pretty_execute "eups admin  -Z $LSST_DEVEL clearCache"
-pretty_execute "eups admin  -Z $LSST_DEVEL buildCache"
+#First action...rebuild the $LSST_DEVEL cache
+pretty_execute "eups admin clearCache -Z $LSST_DEVEL"
+pretty_execute "eups admin buildCache -Z $LSST_DEVEL"
 
 #*************************************************************************
 step "Determine if $PACKAGE will be tested"
@@ -284,23 +289,31 @@ fi
 adjustBadEupsName $PACKAGE
 PACKAGE=$ADJUSTED_NAME
 
-prepareSvnDir $PACKAGE
+prepareSCMDirectory $PACKAGE "BOOTSTRAP"
 if [ $RETVAL != 0 ]; then
-    print "$PACKAGE svn checkout or update failed; contact the LSST buildbot developer"
+    print "$PACKAGE git checkout or update failed; contact the LSST buildbot developer"
     exit 1
 fi
+PACKAGE_GIT_REVISION=$RET_REVISION
+[[ "$DEBUG" ]] && print "PACKAGE: $PACKAGE PACKAGE_GIT_REVISION: $PACKAGE_GIT_REVISION"
 
 #***********************************************************************
-# In order to get an accurate dependency table, ALL trunk svn directories
+# In order to get an accurate dependency table, ALL master SCM directories
 # must be extracted and 'setup -j <name>'  so that eups can deduce
 # the dependencies from the source tree.  Only then should the build
 # of the dependencies commence in the order specified.
 #***********************************************************************
 
 # -- setup root package in prep for dependency list generation
-cd $SVN_LOCAL_DIR
-pretty_execute "setup -r . -j"
-pretty_execute "eups list $PACKAGE"
+# -- First, setup all dependencies for default system version of <package>
+# -- Second, re-setup only trunk of <package>, leaving dependencies as before
+# --   This sets stage for ordering dependencies based on setup versions  
+setup $PACKAGE
+cd $SCM_LOCAL_DIR
+pretty_execute "setup -r . -j "
+[[ "$DEBUG" ]] && eups list | grep "^$PACKAGE "
+PACKAGE_LOCAL_VERSION=`eups list -s $PACKAGE | awk '{print $1}'`
+[[ "$DEBUG" ]] && echo "PACKAGE: $PACKAGE  PACKAGE_LOCAL_VERSION: $PACKAGE_LOCAL_VERSION"
 cd $WORK_PWD
 
 
@@ -308,20 +321,20 @@ cd $WORK_PWD
 step " Bootstrap $PACKAGE Dependency Chain"
 
 BOOT_DEPS="$WORK_PWD/buildbot_tVt_bootstrap"
-cp /dev/null $BOOT_DEPS
+touch  $BOOT_DEPS
 if [ $? != 0 ]; then
    print "Unable to create temp file: $BOOT_DEPS for dependency sequencing."
    print "Test of $PACKAGE failed before it started."
    exit 1
 fi
 TEMP_FILE="$WORK_PWD/buildbot_tVt_temp"
-cp /dev/null $TEMP_FILE
+touch  $TEMP_FILE
 if [ $? != 0 ]; then
    print "Unable to create temp file $TEMP_FILE for dependency sequencing."
    print "Test of $PACKAGE failed before it started."
    exit 1
 fi
-python ${0%/*}/orderDependents.py -t $TEMP_FILE $PACKAGE > $BOOT_DEPS
+python ${0%/*}/gitOrderDependents.py -s  -t $TEMP_FILE $PACKAGE $PACKAGE_LOCAL_VERSION > $BOOT_DEPS
 
 COUNT=0
 while read LINE; 
@@ -333,59 +346,66 @@ done < $BOOT_DEPS
 step "Bootstrap $PACKAGE dependency tree"
 while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     cd $WORK_PWD
+    step "Fetch $CUR_PACKAGE $CUR_VERSION to boostrap dependency list for $PACKAGE"
     #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    # setup only the DM svn-able packages so correct dependency tree is created
+    # setup packages so correct dependency tree is created
     package_is_special $CUR_PACKAGE
     if [ $? = 0 ] ; then 
         continue; 
     fi
     package_is_external ${CUR_PACKAGE}
     if [ $? = 0 ]; then 
+        # 2Dec11 RAA Swapped out for Robert's debug request tracking /lsst/home/buildbot/.eups/ups_db/Linux64.pickleDB1_3_0 error
+        #pretty_execute "setup --debug=raise -v -v -v -j $CUR_PACKAGE $CUR_VERSION"
+         pretty_execute "setup -j $CUR_PACKAGE $CUR_VERSION"
         continue; 
     fi
 
     # -----------------------------------
-    # -- Prepare SVN directory for build --
+    # -- Prepare SCM directory for build --
     # -----------------------------------
 
     adjustBadEupsName $CUR_PACKAGE
     CUR_PACKAGE=$ADJUSTED_NAME
 
-    prepareSvnDir $CUR_PACKAGE
+    prepareSCMDirectory $CUR_PACKAGE "BOOTSTRAP"
     if [ $RETVAL != 0 ]; then
-        print "svn checkout or update failed; is $CUR_PACKAGE $REVISION a valid version?"
+        print "scm checkout or update failed; is $CUR_PACKAGE $REVISION a valid version?"
         exit 1
     fi
 
     # -------------------------------
     # -- setup for a package build --
     # -------------------------------
-    cd $SVN_LOCAL_DIR
+    cd $SCM_LOCAL_DIR
     pretty_execute "setup -r . -j"
-    pretty_execute "eups list $CUR_PACKAGE"
+    eups list  | grep "^$CUR_PACKAGE "
     cd $WORK_PWD
     
 # -- Loop around to next entry in bootstrap dependency list --
 done < "$BOOT_DEPS"
 
+eups list -s
+
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 step "Generate accurate dependency tree for $PACKAGE build"
 REAL_DEPS="$WORK_PWD/buildbot_tVt_real"
-cp /dev/null $REAL_DEPS
+touch $REAL_DEPS
 if [ $? != 0 ]; then
    print "Unable to create temporary file for dependency sequencing."
    print "Test of $PACKAGE failed before it started."
    exit 1
 fi
 TEMP_FILE="$WORK_PWD/buildbot_tVt_realtemp"
-cp /dev/null $TEMP_FILE
+touch $TEMP_FILE
 if [ $? != 0 ]; then
    print "Unable to create temp file $TEMP_FILE for dependency sequencing."
    print "Test of $PACKAGE failed before it started."
    exit 1
 fi
-python ${0%/*}/orderDependents.py -s -t $TEMP_FILE $PACKAGE > $REAL_DEPS
-#python ${0%/*}/orderDependents.py -s $PACKAGE > $REAL_DEPS
+python ${0%/*}/gitOrderDependents.py -s -t $TEMP_FILE $PACKAGE $PACKAGE_LOCAL_VERSION > $REAL_DEPS
+#python ${0%/*}/gitOrderDependents.py -s -t $TEMP_FILE $PACKAGE $PACKAGE_GIT_REVISION > $REAL_DEPS
+#python ${0%/*}/gitOrderDependents.py -s $PACKAGE $PACKAGE_GIT_REVISION > $REAL_DEPS
 
 COUNT=0
 while read LINE; 
@@ -398,9 +418,9 @@ done < $REAL_DEPS
 while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     cd $WORK_PWD
     #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    step "Install dependency $CUR_PACKAGE"
+    step "Install accurate dependency $CUR_PACKAGE"
 
-    # -- Process special lsst packages  neither external nor svn-able --
+    # -- Process special lsst packages  
     package_is_special $CUR_PACKAGE
     if [ $? = 0 ]; then
         # Attempt setup of named package/version; don't exit if failure occurs
@@ -416,33 +436,45 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     # -- Process external packages  via lsstpkg --
     package_is_external ${CUR_PACKAGE}
     if [ $? = 0 ]; then
+        #ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+        #   B U G   B U G     B U G      B U G     B U G     B U G
+        #  Check if new eups always matches Externals on Current  
+        #   		instead of  Current[EUPS DB] reported from 'eups list'
+        #   B U G   B U G     B U G      B U G     B U G     B U G
+        #ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
         print "Installing external package: $CUR_PACKAGE $CUR_VERSION"
-        if [ $CUR_VERSION != "Current" ]; then
-            if [ `eups list $CUR_PACKAGE $CUR_VERSION | wc -l` = 0 ]; then
+        eups list $CUR_PACKAGE $CUR_VERSION
+        if [ $CUR_VERSION != "current" ]; then
+            if [ `eups list -q $CUR_PACKAGE $CUR_VERSION | wc -l` = 0 ]; then
                 INSTALL_CMD="lsstpkg install $CUR_PACKAGE $CUR_VERSION"
                 pretty_execute $INSTALL_CMD
                 if [ $RETVAL != 0 ]; then
-                    print "Failed to install $CUR_PACKAGE $CUR_VERSION with lsstpkg."
-                    emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
+                    FAIL_MSG="Failed to install $CUR_PACKAGE $CUR_VERSION with lsstpkg."
+                    print $FAIL_MSG
+                    emailFailure "$CUR_PACKAGE" "$CUR_VERSION" "$BUCK_STOPS_HERE"
                     exit 1
                 else
                     print "External dependency: $CUR_PACKAGE, successfully installed."
                 fi
             fi
-        else
-            # if dependency just needs 'current', go with it
-            if [ `eups list $CUR_PACKAGE | wc -l` = 0 ]; then
-                print "Failed to setup external dependency: $CUR_PACKAGE."
-                print "An 'lsstpkg install' version was not provided."
-                emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
+        else  
+            # if dependency just needs 'current', not specific rev, go with it
+            # -- SWAPPED  20 Nov 2011 
+            if [ `eups list -q $CUR_PACKAGE -c | wc -l` = 0 ]; then
+                FAIL_MSG="Failed to setup external dependency: $CUR_PACKAGE.\nAn 'lsstpkg install' version was not provided."
+                print $FAIL_MSG
+                emailFailure "$CUR_PACKAGE" "$CUR_VERSION" "$BUCK_STOPS_HERE"
                 exit 1
             fi
             CUR_VERSION=""
         fi
+        # 2Dec11 RAA Swapped out for Robert's debug request tracking /lsst/home/buildbot/.eups/ups_db/Linux64.pickleDB1_3_0 error
+        #pretty_execute "setup --debug=raise -v -v -v  -j $CUR_PACKAGE $CUR_VERSION"
         pretty_execute "setup -j $CUR_PACKAGE $CUR_VERSION"
         if [ $RETVAL != 0 ]; then
-            print "Failed to setup external dependency: $CUR_PACKAGE $CUR_VERSION."
-            emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
+            FAIL_MSG="Failed to setup external dependency: $CUR_PACKAGE $CUR_VERSION."
+            print $FAIL_MSG
+            emailFailure "$CUR_PACKAGE" "$CUR_VERSION" "$BUCK_STOPS_HERE" 
             exit 1
         fi
         print "External dependency: $CUR_PACKAGE $CUR_VERSION, successfully installed."
@@ -457,34 +489,49 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     adjustBadEupsName $CUR_PACKAGE
     CUR_PACKAGE=$ADJUSTED_NAME
 
-    prepareSvnDir $CUR_PACKAGE
+    prepareSCMDirectory $CUR_PACKAGE "BUILD"
     if [ $RETVAL != 0 ]; then
-        print "svn checkout failed; is $CUR_PACKAGE $REVISION a valid version?"
-        emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
+        FAIL_MSG="SCM checkout failed; is $CUR_PACKAGE $REVISION a valid version?"
+        print $FAIL_MSG
+        emailFailure "$CUR_PACKAGE" "$REVISION" "$BUCK_STOPS_HERE" 
         exit 1
     fi
 
-    # Determine if desired package instance is already current & setup  and
-    # not the specific package being validated
-    if [ `eups list $CUR_PACKAGE $REVISION | grep "Current Setup" | wc -l` = 1  -a "$PACKAGE" != "$CUR_PACKAGE" ]; then
-        print "$CUR_PACKAGE $REVISION is already eups-current and -setup; skipping installation."
-        continue
+    # ---------------------------------------------------------------------
+    # --  BLOCK1 -  this assumes that when NoTest is taken, that only a 
+    # --            compilation is required and not a reload to check 
+    # --            altered lib signatures or dependencies.
+    # ---------------------------------------------------------------------
+    print "cur_package is $CUR_PACKAGE   revision is $REVISION"
+    #if  [ "$PACKAGE" != "$CUR_PACKAGE" -a  -f $SCM_LOCAL_DIR/BUILD_OK ] ; then
+    if  [ -f $SCM_LOCAL_DIR/BUILD_OK ] ; then
+        print "Local src directory is marked BUILD_OK"
+        #setup -j -q $CUR_PACKAGE $REVISION
+        [[ "$DEBUG" ]]  &&  eups list $CUR_PACKAGE
+        pretty_execute "setup -j  $CUR_PACKAGE $REVISION"
+        [[ "$DEBUG" ]]  &&  eups list $CUR_PACKAGE
+        if [ $RETVAL = 0 ] ; then
+            print "Package/revision is already eups-installed. Skipping build."
+            continue
+        fi
     fi
 
     # ----------------------------------------------------------------
-    # -- Rest of work is done within the package's source directory --
+    # -- Rest of build work is done within the package's source directory --
     # ----------------------------------------------------------------
-    cd $SVN_LOCAL_DIR 
+    cd $SCM_LOCAL_DIR 
+    rm -f NEEDS_BUILD
 
     # -------------------------------
+    # -- BLOCK 2  see note in BLOCK1
     # -- setup for a package build --
     # -------------------------------
+    #if [ -f BUILD_OK ] ; then
+    #   setup -j $CUR_PACKAGE $REVISION
+    #   print "$CUR_PACKAGE previously built without error; skipping rebuild."
+    #   continue
+    #fi
     pretty_execute "setup -r . -k "
-    if [ $RETVAL != 0 ]; then
-	print "setup failed."
-        print "Exiting since $CUR_PACKAGE failed to build/install successfully"
-        exit 1
-    fi
     pretty_execute "eups list -s"
 
     BUILD_STATUS=0
@@ -516,7 +563,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
             print "Failure of 'tests' Build/Run for $CUR_PACKAGE $REVISION"
             BUILD_STATUS=4
         else   # Built libs OK, ran tests OK, now eups-install
-            pretty_execute "scons  opt=3 install current declare python"
+            pretty_execute "scons  version=$REVISION opt=3 install current declare python"
             if [ $RETVAL != 0 ]; then
                 print "Failure of install: $CUR_PACKAGE $REVISION"
                 BUILD_STATUS=3
@@ -524,7 +571,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
             print "Success of Compile/Load/Test/Install: $CUR_PACKAGE $REVISION"
         fi
     else  # Built libs OK, no tests wanted|available, now eups-install
-            pretty_execute "scons opt=3 install current declare python"
+            pretty_execute "scons version=$REVISION opt=3 install current declare python"
             if [ $RETVAL != 0 ]; then
                 print "Failure of install: $CUR_PACKAGE $REVISION"
                 BUILD_STATUS=1
@@ -540,7 +587,9 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         pretty_execute pwd
         if [ "$LOG_DEST" ]; then
             if [ -f "$LOG_FILE" ]; then
+                set -x
                 copy_log ${CUR_PACKAGE}_$REVISION/$LOG_FILE $LOG_FILE $LOG_DEST_HOST $LOG_DEST_DIR ${CUR_PACKAGE}/$REVISION $LOG_URL
+                set +x
             else
                 print "No $LOG_FILE present."
             fi
@@ -549,38 +598,54 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         fi
     fi
 
+    #----------------------------------------------------------
     # -- return to primary work directory  --
-    # --               later, possibly 'rm' source directory --
+    #----------------------------------------------------------
     cd $WORK_PWD
 
     # Time to exit due to build failure of a dependency
     if [ "$BUILD_STATUS" -ne "0" ]; then
         # Get Email List for Package Owners (returned in $PACKAGE_OWNERS)
         fetch_package_owners $CUR_PACKAGE
-
-        print "Installation of $CUR_PACKAGE $REVISION failed."
-        print "Unable to build trunk-vs-trunk version of $PACKAGE due to failed build of dependency: $CUR_PACKAGE $REVISION ."
+        SEND_TO="$BUCK_STOPS_HERE"
         if [ "$CUR_PACKAGE" == "$PACKAGE" ]; then
-            emailFailure "$CUR_PACKAGE"  "$PACKAGE_OWNERS" "FIND_DEVELOPER"
-        else
-            emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
+            SEND_TO="$PACKAGE_OWNERS"
         fi
+
+        FAIL_MSG="A build of dependency: $CUR_PACKAGE (version: $REVISION) failed.\nUnable to build HEAD-vs-HEAD version of $PACKAGE due to failed build of this dependency.\n\n"
+        print $FAIL_MSG
+        fetch_blame_data $SCM_LOCAL_DIR $WORK_PWD 
+        emailFailure "$CUR_PACKAGE" "$REVISION"  "$SEND_TO" 
+        clear_blame_data
+
+        #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+        # I can't figure out why this is necessary.  If they weren't setup
+        # correctly, they were probably LOCAL: and will thus disappear on exit
+        #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
         #   Following only necessary if failed during scons-install step
-        if [ "`eups list $CUR_PACKAGE $REVISION -s`" != "" ]; then
+        if [ "`eups list  $CUR_PACKAGE $REVISION -s &> /dev/null`" = "0" ]; then
             pretty_execute "setup -u -j $CUR_PACKAGE $REVISION"
         fi
-        if [ "`eups list $CUR_PACKAGE $REVISION -c`" != "" ]; then
+        if [ "`eups list  $CUR_PACKAGE $REVISION -c &> /dev/null`" = "0" ]; then
             pretty_execute "eups undeclare -c $CUR_PACKAGE $REVISION"
         fi
         print "Exiting since $CUR_PACKAGE failed to build/install successfully"
+        #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
         exit 1
     fi
 
     # For production build, setup each successful install 
     print "-------------------------"
-    setup -j $CUR_PACKAGE
-    eups list -v $CUR_PACKAGE
+    setup -j $CUR_PACKAGE $REVISION
+    if [ $? != 0 ]; then
+        print ""
+    fi
+    eups list -v $CUR_PACKAGE $REVISION
     print "-------------------------"
+    touch $SCM_LOCAL_DIR/BUILD_OK
+    [ $? != 0 ] && print "Unable to set flag: $SCM_LOCAL_DIR/BUILD_OK" 
+
+
 
 # -------------------------------------------------
 # -- Loop around to next entry in dependency list --

@@ -1,7 +1,8 @@
 #! /bin/bash
 
 #curl -o newinstall.sh http://dev.lsstcorp.org/tstdms/newinstall.sh
-curl -o newinstall.sh http://lsstdev.ncsa.uiuc.edu/dmspkgs/newinstall.sh
+#curl -o newinstall.sh http://lsstdev.ncsa.uiuc.edu/dmspkgs/newinstall.sh
+curl -o newinstall.sh http://dev.lsstcorp.org/pkgs/std/w12/newinstall.sh
 if [ ! -f newinstall.sh ]; then
     echo "Failed to fetch newinstall.sh"
     exit 1
@@ -9,7 +10,7 @@ fi
 
 export LSST_HOME=`pwd`
 echo "pwd = $LSST_HOME"
-bash ./newinstall.sh
+bash ./newinstall.sh lsstactive
 if [ $? != 0 ]; then
     echo "newinstall.sh failed"
     exit 1

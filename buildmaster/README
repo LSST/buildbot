@@ -1,0 +1,4 @@
+This directory contains file for version 0.8.5 of buildbot
+
+The passwords for the buildslaves need to be changed to the
+production versions, and shouldn't be checked into git.
