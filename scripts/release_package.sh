@@ -74,7 +74,7 @@ if [ "$ASTROMETRY_NET_DATA" ]; then
 	eups declare astrometry_net_data $ASTROMETRY_NET_DATA -r $ASTROMETRY_NET_DATA_DIR
 fi
 
-pretty_execute lsstpkg $EXTRA_ARGS install $INSTALL_PACKAGE
+pretty_execute lsstpkg install $EXTRA_ARGS $INSTALL_PACKAGE
 INSTALL_SUCCEEDED=$RETVAL
 if [ $INSTALL_SUCCEEDED != 0 ]; then
     echo "install $INSTALL_PACKAGE failed"

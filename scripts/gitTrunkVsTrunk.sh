@@ -2,11 +2,12 @@
 # install a requested package from version control, and recursively
 # ensure that its minimal dependencies are installed likewise
 
-#LSST_STACK=/lsst/DC3/stacks/gcc445-RH6/15nov2011
-#LSST_STACK=/lsst/home/buildbot/RHEL6/gitwork/stacks/gcc-445/18nov2011
-#LSST_STACK=/lsst/DC3/stacks/RH6
 LSST_STACK=/lsst/DC3/stacks/gcc445-RH6/28nov2011
 
+# URL pointing to the log files; used in emailed report
+# URL_BUILDERS="http://dev.lsstcorp.org/build/builders"
+# URL_BUILDERS="http://lsst-build.ncsa.illinois.edu:8010/builders"
+URL_BUILDERS="http://lsst-build4.ncsa.illinois.edu:8020/builders"
 
 #--------------------------------------------------------------------------
 usage() {
@@ -15,7 +16,7 @@ usage() {
     echo "Install a requested package from version control (trunk), and recursively"
     echo "ensure that its dependencies are also installed from version control."
     echo
-    echo "Options (must be in this order):"
+    echo "Options:"
     echo "                -verbose: print out extra debugging info"
     echo "                  -force: if package already installed, re-install "
     echo "       -dont_log_success: if specified, only save logs if install fails"
@@ -54,27 +55,13 @@ SKIP_THESE_TESTS=""
 # -- Functions --
 # ---------------
 #--------------------------------------------------------------------------
-# -- Alter eups name not corresponding to directory path convention --
-# $1 = eups package name
-# return ADJUSTED_NAME in LSST standard so its SCM directory name is derived OK
-adjustBadEupsName() {
-    #  A little adjustment of bad package naming:  
-    #  at the moment, only one:  mops -> mops_nightmops
-    if [ "$1" = "mops" ]; then
-        ADJUSTED_NAME="mops_nightmops"
-    else
-        ADJUSTED_NAME="$1"
-    fi
-}
-
-
-#--------------------------------------------------------------------------
 # -- Some LSST internal packages should never be built from trunk --
 # $1 = eups package name
 # return 0 if a special LSST package which should be considered external
+# return 1 if package should be processed as usual
 package_is_special() {
     if [ "$1" = "" ]; then
-        print "No package name provided for internal specialness check. See LSST buildbot developer."
+        print "No package name provided for package_is_special check. See LSST buildbot developer."
         exit 1
     fi
     local SPCL_PACKAGE="$1"
@@ -121,8 +108,7 @@ emailFailure() {
     else
         MAIL_TO="$emailRecipients"
     fi
-    #URL_MASTER_BUILD="http://dev.lsstcorp.org/build/builders/$BUILDER_NAME/builds"
-    URL_MASTER_BUILD="http://lsst-build.ncsa.illinois.edu:8010/builders/$BUILDER_NAME/builds"
+    URL_MASTER_BUILD="$URL_BUILDERS/$BUILDER_NAME/builds"
     EMAIL_SUBJECT="LSST automated build failure: package $emailPackage in $BUILDER_NAME"
 
     [[ "$DEBUG" ]] && print "TO: $MAIL_TO; Subject: $EMAIL_SUBJECT; $BUILDER_NAME"
@@ -256,6 +242,10 @@ if [ ! -d $LSST_DEVEL ] ; then
 fi
 
 PACKAGE=$1
+if [ "$PACKAGE" = "" ]; then
+    echo  "No package name was provided as an input parameter; contact the LSST buildbot guru."
+    exit 1
+fi
 
 print "PACKAGE: $PACKAGE"
 
@@ -286,16 +276,17 @@ if [ $? = 0 ]; then
 fi
 
 
-adjustBadEupsName $PACKAGE
-PACKAGE=$ADJUSTED_NAME
-
 prepareSCMDirectory $PACKAGE "BOOTSTRAP"
+#OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+# 'git clone' creates empty git directory if requested module doesn't exist
+# returns success on that case and extraction of module
+#OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 if [ $RETVAL != 0 ]; then
     print "$PACKAGE git checkout or update failed; contact the LSST buildbot developer"
     exit 1
 fi
-PACKAGE_GIT_REVISION=$RET_REVISION
-[[ "$DEBUG" ]] && print "PACKAGE: $PACKAGE PACKAGE_GIT_REVISION: $PACKAGE_GIT_REVISION"
+PACKAGE_SCM_REVISION=$RET_REVISION
+[[ "$DEBUG" ]] && print "PACKAGE: $PACKAGE PACKAGE_SCM_REVISION: $PACKAGE_SCM_REVISION"
 
 #***********************************************************************
 # In order to get an accurate dependency table, ALL master SCM directories
@@ -309,8 +300,14 @@ PACKAGE_GIT_REVISION=$RET_REVISION
 # -- Second, re-setup only trunk of <package>, leaving dependencies as before
 # --   This sets stage for ordering dependencies based on setup versions  
 setup $PACKAGE
+[[ $? ]] && print "Warning: unable to eups-setup the system version of the package; this only happens if $PACKAGE has never been LSST-Released."
+fi
 cd $SCM_LOCAL_DIR
 pretty_execute "setup -r . -j "
+if [ $RETVAL != 0 ]; then
+    print "FAILURE to eups-setup the 'LOCAL:' source directory of the input package: $PACKAGE."
+    exit 1
+fi
 [[ "$DEBUG" ]] && eups list | grep "^$PACKAGE "
 PACKAGE_LOCAL_VERSION=`eups list -s $PACKAGE | awk '{print $1}'`
 [[ "$DEBUG" ]] && echo "PACKAGE: $PACKAGE  PACKAGE_LOCAL_VERSION: $PACKAGE_LOCAL_VERSION"
@@ -323,18 +320,22 @@ step " Bootstrap $PACKAGE Dependency Chain"
 BOOT_DEPS="$WORK_PWD/buildbot_tVt_bootstrap"
 touch  $BOOT_DEPS
 if [ $? != 0 ]; then
-   print "Unable to create temp file: $BOOT_DEPS for dependency sequencing."
+   print "Failed to create temp file: $BOOT_DEPS for dependency sequencing."
    print "Test of $PACKAGE failed before it started."
    exit 1
 fi
 TEMP_FILE="$WORK_PWD/buildbot_tVt_temp"
 touch  $TEMP_FILE
 if [ $? != 0 ]; then
-   print "Unable to create temp file $TEMP_FILE for dependency sequencing."
+   print "Failed to create temp file $TEMP_FILE for dependency sequencing."
    print "Test of $PACKAGE failed before it started."
    exit 1
 fi
 python ${0%/*}/gitOrderDependents.py -s  -t $TEMP_FILE $PACKAGE $PACKAGE_LOCAL_VERSION > $BOOT_DEPS
+#OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+# is there a reason why the exit status of this cmd isn't checked?
+#OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
 
 COUNT=0
 while read LINE; 
@@ -358,6 +359,9 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         # 2Dec11 RAA Swapped out for Robert's debug request tracking /lsst/home/buildbot/.eups/ups_db/Linux64.pickleDB1_3_0 error
         #pretty_execute "setup --debug=raise -v -v -v -j $CUR_PACKAGE $CUR_VERSION"
          pretty_execute "setup -j $CUR_PACKAGE $CUR_VERSION"
+         if [ $RETVAL != 0 ]; then
+             print "Warning: unable to eups-setup: $CUR_PACKAGE $CUR_VERSION, during bootstrap of dependency tree. Not fatal until accurate dependency tree is built."
+         fi
         continue; 
     fi
 
@@ -365,10 +369,11 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     # -- Prepare SCM directory for build --
     # -----------------------------------
 
-    adjustBadEupsName $CUR_PACKAGE
-    CUR_PACKAGE=$ADJUSTED_NAME
-
     prepareSCMDirectory $CUR_PACKAGE "BOOTSTRAP"
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+    # 'git clone' creates empty git directory if requested module doesn't exist
+    # returns success on that case and extraction of module
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
     if [ $RETVAL != 0 ]; then
         print "scm checkout or update failed; is $CUR_PACKAGE $REVISION a valid version?"
         exit 1
@@ -379,6 +384,10 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     # -------------------------------
     cd $SCM_LOCAL_DIR
     pretty_execute "setup -r . -j"
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+    # How do we feel about a failure to setup the LOCAL dir for an LSST Package
+    # during the initial dependency tree setup?
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
     eups list  | grep "^$CUR_PACKAGE "
     cd $WORK_PWD
     
@@ -392,20 +401,21 @@ step "Generate accurate dependency tree for $PACKAGE build"
 REAL_DEPS="$WORK_PWD/buildbot_tVt_real"
 touch $REAL_DEPS
 if [ $? != 0 ]; then
-   print "Unable to create temporary file for dependency sequencing."
+   print "Failed to create temporary file for dependency sequencing."
    print "Test of $PACKAGE failed before it started."
    exit 1
 fi
 TEMP_FILE="$WORK_PWD/buildbot_tVt_realtemp"
 touch $TEMP_FILE
 if [ $? != 0 ]; then
-   print "Unable to create temp file $TEMP_FILE for dependency sequencing."
+   print "Failed to create temp file $TEMP_FILE for dependency sequencing."
    print "Test of $PACKAGE failed before it started."
    exit 1
 fi
 python ${0%/*}/gitOrderDependents.py -s -t $TEMP_FILE $PACKAGE $PACKAGE_LOCAL_VERSION > $REAL_DEPS
-#python ${0%/*}/gitOrderDependents.py -s -t $TEMP_FILE $PACKAGE $PACKAGE_GIT_REVISION > $REAL_DEPS
-#python ${0%/*}/gitOrderDependents.py -s $PACKAGE $PACKAGE_GIT_REVISION > $REAL_DEPS
+#OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+# is there a reason why the exit status of this cmd isn't checked?
+#OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 COUNT=0
 while read LINE; 
@@ -428,7 +438,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         if [ $? = 0 ]; then
             print "Special-case dependency: $CUR_PACKAGE $CUR_VERSION  successfully installed"
         else
-            print "Special-case dependency: $CUR_PACKAGE $CUR_VERSION  not available. Continuing without it."
+            print "Warning: Special-case dependency: $CUR_PACKAGE $CUR_VERSION  not available. Continuing without it."
         fi
         continue
     fi
@@ -461,7 +471,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
             # if dependency just needs 'current', not specific rev, go with it
             # -- SWAPPED  20 Nov 2011 
             if [ `eups list -q $CUR_PACKAGE -c | wc -l` = 0 ]; then
-                FAIL_MSG="Failed to setup external dependency: $CUR_PACKAGE.\nAn 'lsstpkg install' version was not provided."
+                FAIL_MSG="Failed to setup external dependency: $CUR_PACKAGE.\nAn 'lsstpkg install --current' version was not found."
                 print $FAIL_MSG
                 emailFailure "$CUR_PACKAGE" "$CUR_VERSION" "$BUCK_STOPS_HERE"
                 exit 1
@@ -486,12 +496,13 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     # -----------------------------------
     # -- Prepare SVN directory for build --
     # -----------------------------------
-    adjustBadEupsName $CUR_PACKAGE
-    CUR_PACKAGE=$ADJUSTED_NAME
-
     prepareSCMDirectory $CUR_PACKAGE "BUILD"
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+    # 'git clone' creates empty git directory if requested module doesn't exist
+    # returns success on that case and extraction of module
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
     if [ $RETVAL != 0 ]; then
-        FAIL_MSG="SCM checkout failed; is $CUR_PACKAGE $REVISION a valid version?"
+        FAIL_MSG="Failed to extract source directory; is $CUR_PACKAGE $REVISION a valid version?"
         print $FAIL_MSG
         emailFailure "$CUR_PACKAGE" "$REVISION" "$BUCK_STOPS_HERE" 
         exit 1
@@ -506,7 +517,6 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     #if  [ "$PACKAGE" != "$CUR_PACKAGE" -a  -f $SCM_LOCAL_DIR/BUILD_OK ] ; then
     if  [ -f $SCM_LOCAL_DIR/BUILD_OK ] ; then
         print "Local src directory is marked BUILD_OK"
-        #setup -j -q $CUR_PACKAGE $REVISION
         [[ "$DEBUG" ]]  &&  eups list $CUR_PACKAGE
         pretty_execute "setup -j  $CUR_PACKAGE $REVISION"
         [[ "$DEBUG" ]]  &&  eups list $CUR_PACKAGE
@@ -547,7 +557,6 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
 	# don't run these in parallel, because some tests depend on other
 	# binaries to be built, and there's a race condition that will cause
 	# the tests to fail if they're not built before the test is run.
-        #pretty_execute "scons -j 2 opt=3 tests"
         pretty_execute "scons opt=3 tests"
         FAILED_COUNT=`eval "find tests -name \"*.failed\" $SKIP_THESE_TESTS | wc -l"`
         if [ $FAILED_COUNT != 0 ]; then
@@ -612,7 +621,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
             SEND_TO="$PACKAGE_OWNERS"
         fi
 
-        FAIL_MSG="A build of dependency: $CUR_PACKAGE (version: $REVISION) failed.\nUnable to build HEAD-vs-HEAD version of $PACKAGE due to failed build of this dependency.\n\n"
+        FAIL_MSG="A build of dependency: $CUR_PACKAGE (version: $REVISION) failed.\nFailed to build HEAD-vs-HEAD version of $PACKAGE due to failed build of this dependency.\n\n"
         print $FAIL_MSG
         fetch_blame_data $SCM_LOCAL_DIR $WORK_PWD 
         emailFailure "$CUR_PACKAGE" "$REVISION"  "$SEND_TO" 
@@ -643,7 +652,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     eups list -v $CUR_PACKAGE $REVISION
     print "-------------------------"
     touch $SCM_LOCAL_DIR/BUILD_OK
-    [ $? != 0 ] && print "Unable to set flag: $SCM_LOCAL_DIR/BUILD_OK" 
+    [ $? != 0 ] && print "Failed to set flag: $SCM_LOCAL_DIR/BUILD_OK" 
 
 
 

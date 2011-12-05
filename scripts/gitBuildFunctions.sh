@@ -59,7 +59,7 @@ fetch_blame_data() {
     local BLAME_PWD=`pwd`
     BLAME_TMPFILE="$2/$BUILDBOT_BLAMEFILE"
     BLAME_INFO=""
-    if [ ! -d $1 ] ; then
+    if [ ! -d "$1" ] ; then 
          BLAME_EMAIL=""
          print "Problem fetching blame data: Bad git directory path: $1"
          return 0
@@ -81,7 +81,6 @@ fetch_blame_data() {
     cd $BLAME_PWD
     return 0
 }
-
 
 #---------------------------------------------------------------------------
 # return 0 if $1 is external, 1 if not
@@ -124,6 +123,12 @@ scm_url() {
 
     # Since version not supplied, will acquire master version id
     RET_REVISION=`git ls-remote --refs -h $RET_SCM_URL | grep refs/heads/master | awk '{print $1}'`
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+    # Another situation where expected error return won't ever happen. Need
+    # to first determine if the package exists, if so, do op; else return 1
+    # Suggestion: if [ ! git ls-remote $RET_SCM_URL >& /ev/null];then return 1; etc
+    # Too bad no varient of that seems to get status correctly.
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
     if [[ $? != 0 ]]; then  
         print "Failed fetch of git master revision id for package $1. Exiting." 
         exit 1 
@@ -323,14 +328,14 @@ copy_log() {
 	local dest=$dest_host:$remote_dir/$url_suffix
 	ssh $dest_host "mkdir -p $remote_dir/$additional_dir/$date_dir"
     echo "pwd is "$PWD
-	#scp -q $filename $dest
+      #scp -q $filename $dest
     # put some HTML around the copied file so you it's formatted in the browser
     echo "<HTML><BODY><PRE>" >/tmp/foo.$$
     cat $filename >>/tmp/foo.$$
     echo "</PRE></BODY></HTML>" >>/tmp/foo.$$
-	scp -q /tmp/foo.$$ $dest
+      scp -q /tmp/foo.$$ $dest
     rm /tmp/foo.$$
-    
+ 
 	if [ $? != 0 ]; then
 	    print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 	    print "!!! Failed to copy $filename to $dest"
@@ -436,6 +441,13 @@ prepareSCMDirectory() {
     mkdir -p $SCM_LOCAL_DIR
     step "Check out $SCM_PACKAGE $REVISION from $SCM_URL"
     local SCM_COMMAND="git clone --depth=1 $SCM_URL $SCM_LOCAL_DIR "
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+    # Problem with this operation is that if package doesn't exist, it returns:
+    # "Initialized empty Git repository in /nfs/lsst/home/buildbot/RHEL6/gitwork/builds/TvT/work/git/LSSTPipe/.git/"
+    # and returns success!   Need to first check if URL exists before issuing
+    # the clone.
+    # Suggestion:  git ls-remote $SCM_URL $REVISION ; [[ $? ]] && return 1
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
     verbose_execute $SCM_COMMAND
     if [ $RETVAL = 1 ] ; then
        return 1
