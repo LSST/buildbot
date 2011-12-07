@@ -117,12 +117,12 @@ emailFailure() {
     printf "\
 from: \"Buildbot\" <$BUCK_STOPS_HERE>\n\
 subject: $EMAIL_SUBJECT\n\
-to: \"Godzilla\" <robyn@lsst.org>\n\
+to: \"Godzilla\" <robyn@noao.edu>\n\
 cc: \"Mothra\" <$BUCK_STOPS_HERE>\n" \
 >> email_body.txt
 #to: \"Godzilla\" <robyn@lsst.org>\n" \
-# REPLACE 'TO:' LINE WITH & add trailing slash       to: $MAIL_TO\n
-# ADD TO ABOVE WHEN IT"S TIME & add trailing slash   cc: $BUCK_STOPS_HERE\n\n
+# REPLACE 'TO:' ABOVE " to: $MAIL_TO\n"               & add trailing slash
+# Also  add           " cc: $BUCK_STOPS_HERE\n\n "    & add trailing slash
 
     # Following is if error is failure in Compilation/Test/Build
     if  [ "$BLAME_EMAIL" != "" ] ; then
