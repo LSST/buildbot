@@ -36,9 +36,9 @@ fetch_package_owners() {
     RECIPIENTS=`curl -s $url | grep "package $1" | sed -e "s/package $1://" -e "s/ from /@/g"`
     if [ ! "$RECIPIENTS" ]; then
 	RECIPIENTS=$BUCK_STOPS_HERE
-	print "*** Error: could not extract owner(s) of $1 from $url"
-	print "*** Expected \"package $1: owner from somewhere.edu, owner from gmail.com\""
-	print "*** Sending notification to $RECIPIENTS instead.\""
+	print_error "*** Error: could not extract owner(s) of $1 from $url"
+	print_error "*** Expected \"package $1: owner from somewhere.edu, owner from gmail.com\""
+	print_error "*** Sending notification to $RECIPIENTS instead.\""
     fi
     PACKAGE_OWNERS=$RECIPIENTS
 }
@@ -59,7 +59,7 @@ fetch_blame_data() {
     local BLAME_PWD=`pwd`
     BLAME_TMPFILE="$2/$BUILDBOT_BLAMEFILE"
     BLAME_INFO=""
-    if [ ! -d $1 ] ; then
+    if [ ! -d "$1" ] ; then 
          BLAME_EMAIL=""
          print "Problem fetching blame data: Bad git directory path: $1"
          return 0
@@ -81,7 +81,6 @@ fetch_blame_data() {
     cd $BLAME_PWD
     return 0
 }
-
 
 #---------------------------------------------------------------------------
 # return 0 if $1 is external, 1 if not
@@ -107,26 +106,32 @@ package_is_external() {
 # returns RET_SCM_URL, RET_REVISION
 scm_url() {
     if [ ! "$SCM_SERVER" ]; then
-	print "ERROR: no SCM server configured"
-	return 1
+        print_error "ERROR: no SCM server configured"
+        return 1
     elif [ ! "$1" ]; then
-	print "ERROR: no package specified"
-	return 1
+	    print_error "ERROR: no package specified"
+        return 1
     fi
     # removed in the great git repository rename of 2011
     #scm_server_dir $1
-    #RET_SCM_URL=git@$SCM_SERVER:LSST/DMS/$RET_SCM_SERVER_DIR.git
     RET_SCM_URL=git@$SCM_SERVER:LSST/DMS/$1.git
+    # First verify URL addresses a real git repo.
+    git ls-remote $RET_SCM_URL > /dev/null
+    if [ $? != 0 ]; then
+        print_error "Failed to find a git repository matching URL: $RET_SCM_URL"
+        return 1
+    fi
+    # Note:  git ls-remote  has no option to ask about a specific commit-id.
     if [ "$2" ] ; then
         RET_REVISION = $2
         return 0
     fi
 
-    # Since version not supplied, will acquire master version id
+    # Since version not supplied, will acquire git-master version's commit id
     RET_REVISION=`git ls-remote --refs -h $RET_SCM_URL | grep refs/heads/master | awk '{print $1}'`
-    if [[ $? != 0 ]]; then  
-        print "Failed fetch of git master revision id for package $1. Exiting." 
-        exit 1 
+    if [ $? != 0 ]; then  
+        print_error "Failed getting git master commit id for package $1." 
+        return 1 
     fi
     return 0
 }
@@ -150,32 +155,29 @@ fetch_current_line() {
     local current_list_url="http://$DEV_SERVER/pkgs/std/w12/current.list"
     local line=`curl -s $current_list_url | grep "^$1 "`
     if [ $? = 1 ]; then
-	print "Couldn't fetch $current_list_url:"
-	pretty_execute curl $current_list_url # print error code
+        print "Couldn't fetch $current_list_url:"
+        pretty_execute curl $current_list_url # print error code
     fi
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+    # SRP - if no line exists for this package on the distribution server,
+    # shouldn't that be an error?  
+    # RAA -  No, think new dependency package in git not yet in current.list
+    #     - Need to check if git:<pkg> exists 
     if [ "$line" == "" ]; then
-# SRP - if no line exists for this package on the distribution server,
-# shouldn't that be an error?  
-# RAA -  No, think new dependency package in git not yet in current.list
-#     - Need to check if git:<pkg> exists - fix up block below.
-#  
-#	print "no package '$1' listed in $current_list_url"
-#	if [ "$SCM_SERVER" ]; then
-#	    print "checking git repository instead"
-#	    scm_url $1
-#	    lookup_svn_revision $RET_SCM_URL
-#	    if [ $? == 0 ]; then
-#		# fake it with trunk version -- could use "trunk" as version instead
-#		line="$1 generic svn$RET_REVISION"
-#		#line="$1 generic trunk"
-#	    fi
-#	fi
-        echo $1 "doesn't exist on the distribution server. exiting"
-        exit 1
+        print "No package '$1' listed in $current_list_url"
+        print "Checking git repository for package $1 exists, instead"
+        scm_url $1
+        if [ $? != 0 ] ;  then
+            line="$1 generic $RET_REVISION"
+        else
+            print_error "Failed to find: $1 on the git distribution server."
+            return 1
+        fi
     fi
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
     if [ "$line" == "" ]; then
-	print "unable to look up current version of $1 in $current_list_url or git"
-	return 1
+        print_error "unable to look up current version of $1 in $current_list_url or git"
+        return 1
     fi
     # split on spaces
     local i=0
@@ -184,19 +186,19 @@ fetch_current_line() {
     # 4 pkg_dir (always blank)
     unset CURRENT_LINE
     for COL in $line; do
-	CURRENT_LINE[$i]=$COL
-	# print "${CURRENT_LINE[$i]} = ($COL)"
-	let "i += 1"
+        CURRENT_LINE[$i]=$COL
+        # print "${CURRENT_LINE[$i]} = ($COL)"
+        let "i += 1"
     done
     # if version is "0", call it "trunk" instead
     if [ ${CURRENT_LINE[2]} == "0" ]; then
-	CURRENT_LINE[2]="trunk"
+        CURRENT_LINE[2]="trunk"
     fi
     if [ ${CURRENT_LINE[0]} != $1 ]; then
-	print "package name '$1' doesn't match first column '${CURRENT_LINE[0]}'"\
+        print_error "package name '$1' doesn't match first column '${CURRENT_LINE[0]}'"\
              "in current.list line:"
-	print "    '$line'"
-	return 1
+        print_error "    '$line'"
+        return 1
     fi
 }
 
@@ -235,6 +237,12 @@ debug() {
     if [ "$DEBUG" ]; then
 	print $@
     fi
+}
+
+#---------------------------------------------------------------------------
+# print to stderr -  Assumes stderr is filedescriptor 2.
+print_error() {
+	print $@ > /proc/self/fd/2
 }
 
 #---------------------------------------------------------------------------
@@ -323,18 +331,18 @@ copy_log() {
 	local dest=$dest_host:$remote_dir/$url_suffix
 	ssh $dest_host "mkdir -p $remote_dir/$additional_dir/$date_dir"
     echo "pwd is "$PWD
-	#scp -q $filename $dest
+      #scp -q $filename $dest
     # put some HTML around the copied file so you it's formatted in the browser
     echo "<HTML><BODY><PRE>" >/tmp/foo.$$
     cat $filename >>/tmp/foo.$$
     echo "</PRE></BODY></HTML>" >>/tmp/foo.$$
-	scp -q /tmp/foo.$$ $dest
+      scp -q /tmp/foo.$$ $dest
     rm /tmp/foo.$$
-    
+ 
 	if [ $? != 0 ]; then
-	    print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-	    print "!!! Failed to copy $filename to $dest"
-	    print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+	    print_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+	    print_error "!!! Failed to copy $filename to $dest"
+	    print_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 	else
 	    ssh $dest_host "chmod +r $remote_path"
 	    if [ $url ]; then
@@ -353,7 +361,7 @@ scm_info() {
 }
 
 #---------------------------------------------------------------------------
-# -- setup package's **trunk** scm directory in preparation for 
+# -- setup package's **git-master** scm directory in preparation for 
 #        either extracting initial source tree to bootstrap dependency tree 
 #        or the build  and install the accurate deduced dependency tree
 # $1 = adjusted eups package name
@@ -373,13 +381,13 @@ prepareSCMDirectory() {
     # ------------------------------------------------------------
 
     if [ "$1" = "" ]; then
-        print "No package name for git extraction. See LSST buildbot developer."
+        print_error "No package name for git extraction. See LSST buildbot developer."
         RETVAL=1
         return 1
     fi
 
     if [[ "$2" != "BUILD" && "$2" != "BOOTSTRAP" ]]; then
-        print "Failed to include legitimate purpose of directory extraction: $2. See LSST buildbot developer."
+        print_error "Failed to include legitimate purpose of directory extraction: $2. See LSST buildbot developer."
         RETVAL=1
         return 1
     fi
@@ -387,14 +395,19 @@ prepareSCMDirectory() {
     local SCM_PACKAGE=$1 
     local PASS=$2
 
-    # package is internal and should be built from trunk
+    # package is internal and should be built from git-master
     scm_url $SCM_PACKAGE
+    if [[ $? != 0 ]]; then
+       print_error "Failed acquiring git repository for: $SCM_PACKAGE"
+       RETVAL=1
+       return 1
+    fi
     local PLAIN_VERSION="$RET_REVISION"
     RET_REVISION="$RET_REVISION"
     SCM_URL=$RET_SCM_URL
     REVISION=$RET_REVISION
 
-    print "Internal package: $SCM_PACKAGE will be built from trunk version: $PLAIN_VERSION"
+    print "Internal package: $SCM_PACKAGE will be built from git-master version: $PLAIN_VERSION"
    
     echo "working directory is $PWD" 
     mkdir -p git
@@ -436,6 +449,13 @@ prepareSCMDirectory() {
     mkdir -p $SCM_LOCAL_DIR
     step "Check out $SCM_PACKAGE $REVISION from $SCM_URL"
     local SCM_COMMAND="git clone --depth=1 $SCM_URL $SCM_LOCAL_DIR "
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+    # Problem with this operation is that if package doesn't exist, it returns:
+    # "Initialized empty Git repository in /nfs/lsst/home/buildbot/RHEL6/gitwork/builds/TvT/work/git/LSSTPipe/.git/"
+    # and returns success!   
+    # URL should exist because validated when $SCM_URL is defined. 
+    # However, still need to fix up following error check (an ssh timeout, etc)
+    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
     verbose_execute $SCM_COMMAND
     if [ $RETVAL = 1 ] ; then
        return 1
@@ -444,7 +464,7 @@ prepareSCMDirectory() {
     # Set flag indicating ready for source build
     touch $SCM_LOCAL_DIR/NEEDS_BUILD
     if [ $? != 0 ]; then
-        print "Unable to create temp file: $SCM_LOCAL_DIR/NEEDS_BUILD for prepareSCMDirectory."
+        print_error "Unable to create temp file: $SCM_LOCAL_DIR/NEEDS_BUILD for prepareSCMDirectory."
         RETVAL=1
         return 1
     fi
