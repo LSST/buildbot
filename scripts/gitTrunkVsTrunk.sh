@@ -16,20 +16,20 @@ usage() {
     echo "Install a requested package from version control (trunk), and recursively"
     echo "ensure that its dependencies are also installed from version control."
     echo
-    echo "Options:"
-    echo "                -verbose: print out extra debugging info"
-    echo "                  -force: if package already installed, re-install "
-    echo "       -dont_log_success: if specified, only save logs if install fails"
-    echo "        -log_dest <dest>: scp destination for config.log,"
+    echo "Options (must be in this order):"
+    echo "                --verbose: print out extra debugging info"
+    echo "                  --force: if package already installed, re-install "
+    echo "       --dont_log_success: if specified, only save logs if install fails"
+    echo "        --log_dest <dest>: scp destination for config.log,"
     echo "                          eg \"buildbot@master:/var/www/html/logs\""
-    echo "          -log_url <url>: URL prefix for the log destination,"
+    echo "          --log_url <url>: URL prefix for the log destination,"
     echo "                          eg \"http://master/logs/\""
-    echo "    -builddir <instance>: identifies slave instance at \"slave/<name>\""
-    echo "  -build_number <number>: buildbot's build number assigned to run"
-    echo "    -slave_devel <path> : LSST_DEVEL=<path>"
-    echo "             -production: setting up stack for production run"
-    echo "               -no_tests: only build package, don't run tests"
-    echo "       -parallel <count>: if set, parallel builds set to <count>"
+    echo "    --builddir <instance>: identifies slave instance at \"slave/<name>\""
+    echo "  --build_number <number>: buildbot's build number assigned to run"
+    echo "    --slave_devel <path> : LSST_DEVEL=<path>"
+    echo "             --production: setting up stack for production run"
+    echo "               --no_tests: only build package, don't run tests"
+    echo "       --parallel <count>: if set, parallel builds set to <count>"
     echo "                          else, parallel builds count set to 2."
     echo " where $PWD is location of slave's work directory"
 }
@@ -103,6 +103,7 @@ emailFailure() {
     local emailVersion=$2; shift
     local emailRecipients=$*;
 
+    print "emailPackage = $emailPackage, STEP_NAME = $STEP_NAME"
     if [ "$BLAME_EMAIL" != "" ] ; then
         MAIL_TO="$emailRecipients, $BLAME_EMAIL"
     else
@@ -129,7 +130,7 @@ cc: \"Mothra\" <$BUCK_STOPS_HERE>\n" \
         printf "\
 $FAIL_MSG\n\n\
 You were notified because you are either the package's owner or its last modifier.\n\n\
-The $PACKAGE failure log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}/steps/$PACKAGE/logs/stdio\n\
+The $PACKAGE failure log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}/steps/$STEP_NAME/logs/stdio\n\
 The Continuous Integration build log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}\n \
 Change info:\n" \
 >> email_body.txt
@@ -140,7 +141,7 @@ Change info:\n" \
 An build/installation of package \"$emailPackage\" (version: \"$emailVersion\") failed\n\n\
 You were notified because you are Buildbot's nanny.\n\n\
 $FAIL_MSG\n\n\
-The $PACKAGE failure log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}/steps/$PACKAGE/logs/stdio\n"\
+The $PACKAGE failure log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}/steps/$STEP_NAME/logs/stdio\n"\
 >> email_body.txt
     fi
 
@@ -191,14 +192,15 @@ Questions?  Contact $BUCK_STOPS_HERE \n" \
 # -- get arguments --
 # -------------------
 
-options=$(getopt -l verbose,boot,force,dont_log_success,log_dest:,log_url:,builder_name:,build_number:,slave_devel:,production,no_tests,parallel:,package: -- "$@")
+options=$(getopt -l verbose,boot,force,dont_log_success,log_dest:,log_url:,builder_name:,build_number:,slave_devel:,production,no_tests,parallel:,package:,step_name: -- "$@")
 
 LOG_SUCCESS=0
 BUILDER_NAME=""
 BUILD_NUMBER=0
 PRODUCTION_RUN=1
 DO_TESTS=0
-SLAVE_DEVEL="xyzzy"
+PARALLEL=2
+STEP_NAME="unknown"
 while true
 do
     case $1 in
@@ -220,21 +222,22 @@ do
                 BUILD_NUMBER=$2;
                 print "BUILD_NUMBER: $BUILD_NUMBER"
                 shift 2;;
-        --slave_devel) SLAVE_DEVEL=$2; shift 2;;
         --production) PRODUCTION_RUN=0; shift 1;;
         --no_tests) DO_TESTS=1; shift 1;;
         --parallel) PARALLEL=$2; shift 2;;
         --package) PACKAGE=$2; shift 2;;
+        --step_name) STEP_NAME=$2; shift 2;;
         *) echo "parsed options; arguments left are: $*"
              break;;
     esac
 done
 
-echo "SLAVE_DEVEL = $SLAVE_DEVEL"
-if [ "$SLAVE_DEVEL" = "xyzzy" ]; then
-    echo "Missing argument --slave_devel must be specified"
+echo "STEP_NAME = $STEP_NAME"
+if [ "$STEP_NAME" = "unknown" ]; then
+    echo "Missing argument --step_name must be specified"
     exit 1
 fi
+
 
 if [ ! -d $LSST_DEVEL ] ; then
     print_error "LSST_DEVEL: $LSST_DEVEL does not exist; contact the LSST buildbot guru."
@@ -453,6 +456,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
                 if [ $RETVAL != 0 ]; then
                     FAIL_MSG="Failed to install $CUR_PACKAGE $CUR_VERSION with lsstpkg."
                     print_error $FAIL_MSG
+                    #emailFailure "$STEP_NAME" "$CUR_VERSION" "$BUCK_STOPS_HERE"
                     emailFailure "$CUR_PACKAGE" "$CUR_VERSION" "$BUCK_STOPS_HERE"
                     exit 1
                 else
@@ -465,6 +469,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
             if [ `eups list -q $CUR_PACKAGE -c | wc -l` = 0 ]; then
                 FAIL_MSG="Failed to setup external dependency: $CUR_PACKAGE.\nAn 'lsstpkg install --current' version was not found."
                 print_error $FAIL_MSG
+                #emailFailure "$STEP_NAME" "$CUR_VERSION" "$BUCK_STOPS_HERE"
                 emailFailure "$CUR_PACKAGE" "$CUR_VERSION" "$BUCK_STOPS_HERE"
                 exit 1
             fi
@@ -476,6 +481,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         if [ $RETVAL != 0 ]; then
             FAIL_MSG="Failed to setup external dependency: $CUR_PACKAGE $CUR_VERSION."
             print_error $FAIL_MSG
+            #emailFailure "$STEP_NAME" "$CUR_VERSION" "$BUCK_STOPS_HERE" 
             emailFailure "$CUR_PACKAGE" "$CUR_VERSION" "$BUCK_STOPS_HERE" 
             exit 1
         fi
@@ -492,6 +498,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     if [ $RETVAL != 0 ]; then
         FAIL_MSG="Failed to extract source directory for $CUR_PACKAGE."
         print_error $FAIL_MSG
+        #emailFailure "$STEP_NAME" "$REVISION" "$BUCK_STOPS_HERE" 
         emailFailure "$CUR_PACKAGE" "$REVISION" "$BUCK_STOPS_HERE" 
         exit 1
     fi
@@ -584,9 +591,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         pretty_execute pwd
         if [ "$LOG_DEST" ]; then
             if [ -f "$LOG_FILE" ]; then
-                set -x
                 copy_log ${CUR_PACKAGE}_$REVISION/$LOG_FILE $LOG_FILE $LOG_DEST_HOST $LOG_DEST_DIR ${CUR_PACKAGE}/$REVISION $LOG_URL
-                set +x
             else
                 print "No $LOG_FILE present."
             fi
@@ -612,6 +617,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         FAIL_MSG="A build of dependency: $CUR_PACKAGE (version: $REVISION) failed.\nFailed to build HEAD-vs-HEAD version of $PACKAGE due to failed build of this dependency.\n\n"
         print_error $FAIL_MSG
         fetch_blame_data $SCM_LOCAL_DIR $WORK_PWD 
+        #emailFailure "$STEP_NAME" "$REVISION"  "$SEND_TO" 
         emailFailure "$CUR_PACKAGE" "$REVISION"  "$SEND_TO" 
         clear_blame_data
 
