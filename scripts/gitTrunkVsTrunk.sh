@@ -6,8 +6,8 @@ LSST_STACK=/lsst/DC3/stacks/gcc445-RH6/28nov2011
 
 # URL pointing to the log files; used in emailed report
 # URL_BUILDERS="http://dev.lsstcorp.org/build/builders"
-# URL_BUILDERS="http://lsst-build.ncsa.illinois.edu:8010/builders"
-URL_BUILDERS="http://lsst-build4.ncsa.illinois.edu:8020/builders"
+URL_BUILDERS="http://lsst-build.ncsa.illinois.edu:8010/builders"
+#Robyn: URL_BUILDERS="http://lsst-build4.ncsa.illinois.edu:8020/builders"
 
 #--------------------------------------------------------------------------
 usage() {
@@ -104,11 +104,7 @@ emailFailure() {
     local emailRecipients=$*;
 
     print "emailPackage = $emailPackage, STEP_NAME = $STEP_NAME"
-    if [ "$BLAME_EMAIL" != "" ] ; then
-        MAIL_TO="$emailRecipients, $BLAME_EMAIL"
-    else
-        MAIL_TO="$emailRecipients"
-    fi
+    MAIL_TO="$emailRecipients"
     URL_MASTER_BUILD="$URL_BUILDERS/$BUILDER_NAME/builds"
     EMAIL_SUBJECT="LSST automated build failure: package $emailPackage in $BUILDER_NAME"
 
@@ -138,7 +134,7 @@ Change info:\n" \
 >> email_body.txt
     else  # For Non-Compilation/Test/Build failures directed to BUCK_STOPS_HERE
         printf "\
-An build/installation of package \"$emailPackage\" (version: \"$emailVersion\") failed\n\n\
+A build/installation of package \"$emailPackage\" (version: \"$emailVersion\") failed\n\n\
 You were notified because you are Buildbot's nanny.\n\n\
 $FAIL_MSG\n\n\
 The $PACKAGE failure log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}/steps/$STEP_NAME/logs/stdio\n"\
@@ -263,10 +259,6 @@ source $LSST_STACK"/loadLSST.sh"
 #First action...rebuild the $LSST_DEVEL cache
 pretty_execute "eups admin clearCache -Z $LSST_DEVEL"
 pretty_execute "eups admin buildCache -Z $LSST_DEVEL"
-
-
-
-print_error "Testing, Testing, Testing that print_error() output is Red."
 
 #*************************************************************************
 step "Determine if $PACKAGE will be tested"
@@ -607,33 +599,28 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
 
     # Time to exit due to build failure of a dependency
     if [ "$BUILD_STATUS" -ne "0" ]; then
-        # Get Email List for Package Owners (returned in $PACKAGE_OWNERS)
-        fetch_package_owners $CUR_PACKAGE
-        SEND_TO="$BUCK_STOPS_HERE"
-        if [ "$CUR_PACKAGE" == "$PACKAGE" ]; then
-            SEND_TO="$PACKAGE_OWNERS"
-        fi
-
         FAIL_MSG="A build of dependency: $CUR_PACKAGE (version: $REVISION) failed.\nFailed to build HEAD-vs-HEAD version of $PACKAGE due to failed build of this dependency.\n\n"
         print_error $FAIL_MSG
+        # Get Email List for Package Owners & Blame list
+        fetch_package_owners $CUR_PACKAGE
         fetch_blame_data $SCM_LOCAL_DIR $WORK_PWD 
+        if [ "$CUR_PACKAGE" != "$PACKAGE" ]; then
+           SEND_TO="$BUCK_STOPS_HERE"
+        else
+           SEND_TO="$PACKAGE_OWNERS, $BLAME_EMAIL"
+        fi
         #emailFailure "$STEP_NAME" "$REVISION"  "$SEND_TO" 
         emailFailure "$CUR_PACKAGE" "$REVISION"  "$SEND_TO" 
         clear_blame_data
 
-        #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-        # I can't figure out why this is necessary.  If they weren't setup
-        # correctly, they were probably LOCAL: and will thus disappear on exit
-        #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
         #   Following only necessary if failed during scons-install step
-        if [ "`eups list  $CUR_PACKAGE $REVISION -s &> /dev/null`" = "0" ]; then
+        if [ "`eups list -s $CUR_PACKAGE $REVISION 2> /dev/null | grep $REVISION | wc -l`" != "0" ]; then
             pretty_execute "setup -u -j $CUR_PACKAGE $REVISION"
         fi
-        if [ "`eups list  $CUR_PACKAGE $REVISION -c &> /dev/null`" = "0" ]; then
+        if [ "`eups list -c $CUR_PACKAGE $REVISION  &> /dev/null | grep $REVISION | wc -l`" != "0" ]; then
             pretty_execute "eups undeclare -c $CUR_PACKAGE $REVISION"
         fi
         print_error "Exiting since $CUR_PACKAGE failed to build/install successfully"
-        #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
         exit 1
     fi
 

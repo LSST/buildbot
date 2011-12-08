@@ -86,14 +86,17 @@ fetch_blame_data() {
 # return 0 if $1 is external, 1 if not
 package_is_external() {
     fetch_current_line $@
+    if [ $? != 0 ]; then
+        return 1
+    fi
     local extra_dir=${CURRENT_LINE[3]}
     
     if [ "${extra_dir:0:8}" = "external" ]; then
-	debug "$1 is an external package"
-	return 0
+        debug "$1 is an external package"
+        return 0
     else
-	debug "$1 is probably an internal LSST package"
-	return 1
+        debug "$1 is probably an internal LSST package"
+        return 1
     fi
 }
 
@@ -129,7 +132,7 @@ scm_url() {
 
     # Since version not supplied, will acquire git-master version's commit id
     RET_REVISION=`git ls-remote --refs -h $RET_SCM_URL | grep refs/heads/master | awk '{print $1}'`
-    if [ $? != 0 ]; then  
+    if [[ $? != 0 ]]; then  
         print_error "Failed getting git master commit id for package $1." 
         return 1 
     fi
@@ -148,8 +151,8 @@ scm_server_dir() {
 }
 
 #---------------------------------------------------------------------------
-# fetch $1's line from current.list, and set $CURRENT_LINE to its
-# contents, as an array, split by white space
+# $1 = package name; fetch $1's line from 'current.list'
+# set $CURRENT_LINE to its contents, as an array, split by white space
 fetch_current_line() {
     debug "Look up current version of $1 in http://$DEV_SERVER/pkgs/std/w12/current.list"
     local current_list_url="http://$DEV_SERVER/pkgs/std/w12/current.list"
@@ -158,25 +161,9 @@ fetch_current_line() {
         print "Couldn't fetch $current_list_url:"
         pretty_execute curl $current_list_url # print error code
     fi
-    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-    # SRP - if no line exists for this package on the distribution server,
-    # shouldn't that be an error?  
-    # RAA -  No, think new dependency package in git not yet in current.list
-    #     - Need to check if git:<pkg> exists 
     if [ "$line" == "" ]; then
-        print "No package '$1' listed in $current_list_url"
-        print "Checking git repository for package $1 exists, instead"
-        scm_url $1
-        if [ $? != 0 ] ;  then
-            line="$1 generic $RET_REVISION"
-        else
-            print_error "Failed to find: $1 on the git distribution server."
-            return 1
-        fi
-    fi
-    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-    if [ "$line" == "" ]; then
-        print_error "unable to look up current version of $1 in $current_list_url or git"
+        print_error "unable to look up current version of $1 in $current_list_url"
+        unset CURRENT_LINE
         return 1
     fi
     # split on spaces
@@ -330,14 +317,13 @@ copy_log() {
 	local remote_path=$remote_dir/$url_suffix
 	local dest=$dest_host:$remote_dir/$url_suffix
 	ssh $dest_host "mkdir -p $remote_dir/$additional_dir/$date_dir"
-    echo "pwd is "$PWD
-      #scp -q $filename $dest
-    # put some HTML around the copied file so you it's formatted in the browser
-    echo "<HTML><BODY><PRE>" >/tmp/foo.$$
-    cat $filename >>/tmp/foo.$$
-    echo "</PRE></BODY></HTML>" >>/tmp/foo.$$
-      scp -q /tmp/foo.$$ $dest
-    rm /tmp/foo.$$
+        echo "pwd is "$PWD
+        #scp -q $filename $dest
+        # put some HTML around the copied file so you it's formatted in the browser
+        echo "<HTML><BODY><PRE>" >/tmp/foo.$$
+        cat $filename >>/tmp/foo.$$
+        echo "</PRE></BODY></HTML>" >>/tmp/foo.$$
+        scp -q /tmp/foo.$$ $dest
  
 	if [ $? != 0 ]; then
 	    print_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
@@ -350,6 +336,7 @@ copy_log() {
 		echo "log file $file_description saved to $url/$url_suffix"
 	    fi
 	fi
+        rm /tmp/foo.$$
     fi
 }
 
@@ -399,6 +386,10 @@ prepareSCMDirectory() {
     scm_url $SCM_PACKAGE
     if [[ $? != 0 ]]; then
        print_error "Failed acquiring git repository for: $SCM_PACKAGE"
+       RET_REVISION=""
+       REVISION=""
+       SCM_URL=""
+       SCM_LOCAL_DIR=""
        RETVAL=1
        return 1
     fi
@@ -454,7 +445,7 @@ prepareSCMDirectory() {
     # "Initialized empty Git repository in /nfs/lsst/home/buildbot/RHEL6/gitwork/builds/TvT/work/git/LSSTPipe/.git/"
     # and returns success!   
     # URL should exist because validated when $SCM_URL is defined. 
-    # However, still need to fix up following error check (an ssh timeout, etc)
+    # However, still need to fix up following error check (on ssh timeout, etc)
     #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
     verbose_execute $SCM_COMMAND
     if [ $RETVAL = 1 ] ; then
