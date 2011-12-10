@@ -73,10 +73,10 @@ ctr = len(package)
 if ctr == 0:
     if useSetup != "":
     	print "Request to use only pre-setup dependencies and found none."
-        exit(1)
+        sys.exit(1)
     else:
         print "No dependencies were found for %s." %(root_package)
-        exit(1)
+        sys.exit(1)
 
 
 for bkwdIndex in range(ctr-1,-1,-1):

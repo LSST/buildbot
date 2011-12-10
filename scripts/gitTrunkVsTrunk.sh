@@ -6,8 +6,8 @@ LSST_STACK=/lsst/DC3/stacks/gcc445-RH6/28nov2011
 
 # URL pointing to the log files; used in emailed report
 # URL_BUILDERS="http://dev.lsstcorp.org/build/builders"
-URL_BUILDERS="http://lsst-build.ncsa.illinois.edu:8010/builders"
-#Robyn: URL_BUILDERS="http://lsst-build4.ncsa.illinois.edu:8020/builders"
+# URL_BUILDERS="http://lsst-build.ncsa.illinois.edu:8010/builders"
+URL_BUILDERS="http://lsst-build4.ncsa.illinois.edu:8020/builders"
 
 #--------------------------------------------------------------------------
 usage() {
@@ -61,7 +61,8 @@ SKIP_THESE_TESTS=""
 # return 1 if package should be processed as usual
 package_is_special() {
     if [ "$1" = "" ]; then
-        print_error "No package name provided for package_is_special check. See LSST buildbot developer."
+        FAIL_MSG="No package name provided for package_is_special check. See LSST buildbot developer."
+        emailFailure "NoPackageNamed" "$BUCK_STOPS_HERE"
         exit 1
     fi
     local SPCL_PACKAGE="$1"
@@ -69,6 +70,7 @@ package_is_special() {
     # 23 Nov 2011 installed toolchain since it's not in active.list, 
     #             required by tcltk but not an lsstpkg distrib package.
     if [ ${SPCL_PACKAGE:0:5} = "scons" \
+        -o ${SPCL_PACKAGE} = "thirdparty_core"  \
         -o ${SPCL_PACKAGE} = "toolchain"  \
         -o ${SPCL_PACKAGE:0:7} = "devenv_"  \
         -o $SPCL_PACKAGE = "gcc"  \
@@ -92,16 +94,22 @@ package_is_special() {
 #--------------------------------------------------------------------------
 # -- On Failure, email appropriate notice to proper recipient(s)
 # $1 = package
-# $2 = version
-# $3 = recipients  (May have embedded blanks)
-#      Note BLAME details are fetched at point of failure and ready for use
-#           FAIL_MSG is also set prior to invocation
+# $2 = recipients  (May have embedded blanks)
+# Pre-Setup: BLAME_TMPFILE : file log of last commit on $1
+#            BLAME_EMAIL : email address of last developer to modify package
+#            FAIL_MSG : text tuned to point of error
+#            STEP_NAME : name of package being processed in this run.
+#            URL_BUILDERS : web address to build log root directory
+#            BUILDER_NAME : process input param indicating build type
+#            BUCK_STOPS_HERE : email oddress of last resort
 # return: 0  
 
 emailFailure() {
     local emailPackage=$1; shift
-    local emailVersion=$2; shift
     local emailRecipients=$*;
+
+    # send failure message to stderr for display 
+    print_error $FAIL_MSG
 
     print "emailPackage = $emailPackage, STEP_NAME = $STEP_NAME"
     MAIL_TO="$emailRecipients"
@@ -123,21 +131,21 @@ cc: \"Mothra\" <$BUCK_STOPS_HERE>\n" \
 
     # Following is if error is failure in Compilation/Test/Build
     if  [ "$BLAME_EMAIL" != "" ] ; then
-        printf "\
-$FAIL_MSG\n\n\
+        printf "\n\
+$FAIL_MSG\n\
 You were notified because you are either the package's owner or its last modifier.\n\n\
-The $PACKAGE failure log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}/steps/$STEP_NAME/logs/stdio\n\
-The Continuous Integration build log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}\n \
-Change info:\n" \
+The failure log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}/steps/$STEP_NAME/logs/stdio\n\
+The Continuous Integration build log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}\n\n\
+Commit log:\n" \
 >> email_body.txt
         cat $BLAME_TMPFILE \
 >> email_body.txt
     else  # For Non-Compilation/Test/Build failures directed to BUCK_STOPS_HERE
         printf "\
-A build/installation of package \"$emailPackage\" (version: \"$emailVersion\") failed\n\n\
+A build/installation of package \"$emailPackage\" failed\n\n\
 You were notified because you are Buildbot's nanny.\n\n\
 $FAIL_MSG\n\n\
-The $PACKAGE failure log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}/steps/$STEP_NAME/logs/stdio\n"\
+The failure log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}/steps/$STEP_NAME/logs/stdio\n"\
 >> email_body.txt
     fi
 
@@ -163,7 +171,7 @@ Questions?  Contact $BUCK_STOPS_HERE \n" \
 #        # Determine last developer to modify the package
 #        local LAST_MODIFIER=`svn info $SCM_LOCAL_DIR | grep 'Last Changed Author: ' | sed -e "s/Last Changed Author: //"`
 #    
-#        # Is LAST_MODIFIER already in the list of PACKAGE_OWNERS (aka $emailVersion)?
+#        # Is LAST_MODIFIER already in the list of PACKAGE_OWNERS ?
 #        local OVERLAP=`echo ${2}  | sed -e "s/.*${LAST_MODIFIER}.*/FOUND/"`
 #        unset DEVELOPER
 #        if [ "$OVERLAP" != "FOUND" ]; then
@@ -230,19 +238,22 @@ done
 
 echo "STEP_NAME = $STEP_NAME"
 if [ "$STEP_NAME" = "unknown" ]; then
-    echo "Missing argument --step_name must be specified"
+    FAIL_MSG="Missing argument --step_name must be specified"
+    emailFailure "Unknown"  "$BUCK_STOPS_HERE"
     exit 1
 fi
 
 
 if [ ! -d $LSST_DEVEL ] ; then
-    print_error "LSST_DEVEL: $LSST_DEVEL does not exist; contact the LSST buildbot guru."
+    FAIL_MSG="LSST_DEVEL: $LSST_DEVEL does not exist."
+    emailFailure "Unknown" "$BUCK_STOPS_HERE"
     exit 1
 fi
 
 PACKAGE=$1
 if [ "$PACKAGE" = "" ]; then
-    echo  "No package name was provided as an input parameter; contact the LSST buildbot guru."
+    FAIL_MSG="No package name was provided as an input parameter."
+    emailFailure "Unknown" "$BUCK_STOPS_HERE"
     exit 1
 fi
 
@@ -277,7 +288,8 @@ fi
 
 prepareSCMDirectory $PACKAGE "BOOTSTRAP"
 if [ $RETVAL != 0 ]; then
-    print_error="Failed to extract source directory for $PACKAGE."
+    FAIL_MSG="Failed to extract $PACKAGE source directory during setup for bootstrap dependency."
+    emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
     exit 1
 fi
 PACKAGE_SCM_REVISION=$RET_REVISION
@@ -300,7 +312,8 @@ pretty_execute "setup --tag stable $PACKAGE"
 cd $SCM_LOCAL_DIR
 pretty_execute "setup -r . -j "
 if [ $RETVAL != 0 ]; then
-    print_error "FAILURE to eups-setup the 'LOCAL:' source directory of the input package: $PACKAGE."
+    FAIL_MSG="FAILURE to eups-setup the 'LOCAL:' source directory of the input package: $PACKAGE."
+    emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
     exit 1
 fi
 [[ "$DEBUG" ]] && eups list | grep "^$PACKAGE "
@@ -315,19 +328,23 @@ step " Bootstrap $PACKAGE Dependency Chain"
 BOOT_DEPS="$WORK_PWD/buildbot_tVt_bootstrap"
 touch  $BOOT_DEPS
 if [ $? != 0 ]; then
-   print_error "Failed to create temp file: $BOOT_DEPS for dependency sequencing.\nTest of $PACKAGE failed before it started."
-   exit 1
+    $FAIL_MSG="Failed to create temp file: $BOOT_DEPS for dependency sequencing.\nTest of $PACKAGE failed before it started."
+    emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
+    exit 1
 fi
 TEMP_FILE="$WORK_PWD/buildbot_tVt_temp"
 touch  $TEMP_FILE
 if [ $? != 0 ]; then
-   print_error "Failed to create temp file $TEMP_FILE for dependency sequencing.\nTest of $PACKAGE failed before it started."
-   exit 1
+    FAIL_MSG="Failed to create temp file $TEMP_FILE for dependency sequencing.\nTest of $PACKAGE failed before it started."
+    emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
+    exit 1
 fi
 python ${0%/*}/gitOrderDependents.py -s  -t $TEMP_FILE $PACKAGE $PACKAGE_LOCAL_VERSION > $BOOT_DEPS
-#OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-# is there a reason why the exit status of this cmd isn't checked?
-#OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+if [ $? != 0 ]; then
+    FAIL_MSG="Failed to build a dependency list for package: $PACKAGE $PACKAGE_LOCAL_VERSION."
+    emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
+    exit 1
+fi
 
 
 COUNT=0
@@ -353,7 +370,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         #pretty_execute "setup --debug=raise -v -v -v -j $CUR_PACKAGE $CUR_VERSION"
          pretty_execute "setup -j $CUR_PACKAGE $CUR_VERSION"
          if [ $RETVAL != 0 ]; then
-             print "Warning: unable to eups-setup: $CUR_PACKAGE $CUR_VERSION, during bootstrap of dependency tree. Not fatal until accurate dependency tree is built."
+             print_error "Warning: unable to eups-setup: $CUR_PACKAGE $CUR_VERSION, during bootstrap of dependency tree. Not fatal until accurate dependency tree is built."
          fi
         continue; 
     fi
@@ -364,7 +381,8 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
 
     prepareSCMDirectory $CUR_PACKAGE "BOOTSTRAP"
     if [ $RETVAL != 0 ]; then
-        print_error="Failed to extract source directory for $CUR_PACKAGE."
+        FAIL_MSG="Failed to extract source directory for $CUR_PACKAGE @ $CUR_VERSION when bootstrapping the dependency tree."
+        emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
         exit 1
     fi
 
@@ -373,10 +391,10 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     # -------------------------------
     cd $SCM_LOCAL_DIR
     pretty_execute "setup -r . -j"
-    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-    # How do we feel about a failure to setup the LOCAL dir for an LSST Package
-    # during the initial dependency tree setup?
-    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+    if [ $? != 0 ]; then
+        FAIL_MSG="Failed in eups-set of $CUR_PACKAGE @ $CUR_VERSION during first pass at dependency installation."
+        emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
+    fi
     eups list  | grep "^$CUR_PACKAGE "
     cd $WORK_PWD
     
@@ -390,19 +408,24 @@ step "Generate accurate dependency tree for $PACKAGE build"
 REAL_DEPS="$WORK_PWD/buildbot_tVt_real"
 touch $REAL_DEPS
 if [ $? != 0 ]; then
-   print_error "Failed to create temporary file for dependency sequencing.\nTest of $PACKAGE failed before it started."
-   exit 1
+    FAIL_MSG="Failed to create temporary file for dependency sequencing.\nTest of $PACKAGE failed before it started."
+    emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
+    exit 1
 fi
 TEMP_FILE="$WORK_PWD/buildbot_tVt_realtemp"
 touch $TEMP_FILE
 if [ $? != 0 ]; then
-   print_error "Failed to create temp file $TEMP_FILE for dependency sequencing.\nTest of $PACKAGE failed before it started."
-   exit 1
+    FAIL_MSG="Failed to create temp file $TEMP_FILE for dependency sequencing.\nTest of $PACKAGE failed before it started."
+    emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
+    exit 1
 fi
 python ${0%/*}/gitOrderDependents.py -s -t $TEMP_FILE $PACKAGE $PACKAGE_LOCAL_VERSION > $REAL_DEPS
-#OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-# is there a reason why the exit status of this cmd isn't checked?
-#OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+if [ $? != 0 ]; then
+    FAIL_MSG="Failed to build a dependency list for package: $PACKAGE $PACKAGE_LOCAL_VERSION."
+    print_error $FAIL_MSG
+    emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
+    exit 1
+fi
 
 COUNT=0
 while read LINE; 
@@ -425,7 +448,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         if [ $? = 0 ]; then
             print "Special-case dependency: $CUR_PACKAGE $CUR_VERSION  successfully installed"
         else
-            print "Warning: Special-case dependency: $CUR_PACKAGE $CUR_VERSION  not available. Continuing without it."
+            print_error "Warning: Special-case dependency: $CUR_PACKAGE $CUR_VERSION  not available. Continuing without it."
         fi
         continue
     fi
@@ -433,12 +456,6 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     # -- Process external packages  via lsstpkg --
     package_is_external ${CUR_PACKAGE}
     if [ $? = 0 ]; then
-        #ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
-        #   B U G   B U G     B U G      B U G     B U G     B U G
-        #  Check if new eups always matches Externals on Current  
-        #   		instead of  Current[EUPS DB] reported from 'eups list'
-        #   B U G   B U G     B U G      B U G     B U G     B U G
-        #ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
         print "Installing external package: $CUR_PACKAGE $CUR_VERSION"
         eups list $CUR_PACKAGE $CUR_VERSION
         if [ $CUR_VERSION != "current" ]; then
@@ -447,12 +464,11 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
                 pretty_execute $INSTALL_CMD
                 if [ $RETVAL != 0 ]; then
                     FAIL_MSG="Failed to install $CUR_PACKAGE $CUR_VERSION with lsstpkg."
-                    print_error $FAIL_MSG
-                    #emailFailure "$STEP_NAME" "$CUR_VERSION" "$BUCK_STOPS_HERE"
-                    emailFailure "$CUR_PACKAGE" "$CUR_VERSION" "$BUCK_STOPS_HERE"
+                    #emailFailure "$STEP_NAME" "$BUCK_STOPS_HERE"
+                    emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
                     exit 1
                 else
-                    print "External dependency: $CUR_PACKAGE, successfully installed."
+                    [[ "$DEBUG" ]] && print "External dependency: $CUR_PACKAGE, successfully installed."
                 fi
             fi
         else  
@@ -460,9 +476,8 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
             # -- SWAPPED  20 Nov 2011 
             if [ `eups list -q $CUR_PACKAGE -c | wc -l` = 0 ]; then
                 FAIL_MSG="Failed to setup external dependency: $CUR_PACKAGE.\nAn 'lsstpkg install --current' version was not found."
-                print_error $FAIL_MSG
-                #emailFailure "$STEP_NAME" "$CUR_VERSION" "$BUCK_STOPS_HERE"
-                emailFailure "$CUR_PACKAGE" "$CUR_VERSION" "$BUCK_STOPS_HERE"
+                #emailFailure "$STEP_NAME" "$BUCK_STOPS_HERE"
+                emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
                 exit 1
             fi
             CUR_VERSION=""
@@ -472,12 +487,11 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         pretty_execute "setup -j $CUR_PACKAGE $CUR_VERSION"
         if [ $RETVAL != 0 ]; then
             FAIL_MSG="Failed to setup external dependency: $CUR_PACKAGE $CUR_VERSION."
-            print_error $FAIL_MSG
-            #emailFailure "$STEP_NAME" "$CUR_VERSION" "$BUCK_STOPS_HERE" 
-            emailFailure "$CUR_PACKAGE" "$CUR_VERSION" "$BUCK_STOPS_HERE" 
+            #emailFailure "$STEP_NAME" "$BUCK_STOPS_HERE" 
+            emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE" 
             exit 1
         fi
-        print "External dependency: $CUR_PACKAGE $CUR_VERSION, successfully installed."
+        [[ "$DEBUG" ]] && print "External dependency: $CUR_PACKAGE $CUR_VERSION, successfully installed."
         continue
     fi
 
@@ -489,9 +503,8 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     prepareSCMDirectory $CUR_PACKAGE "BUILD"
     if [ $RETVAL != 0 ]; then
         FAIL_MSG="Failed to extract source directory for $CUR_PACKAGE."
-        print_error $FAIL_MSG
-        #emailFailure "$STEP_NAME" "$REVISION" "$BUCK_STOPS_HERE" 
-        emailFailure "$CUR_PACKAGE" "$REVISION" "$BUCK_STOPS_HERE" 
+        #emailFailure "$STEP_NAME" "$BUCK_STOPS_HERE" 
+        emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE" 
         exit 1
     fi
 
@@ -532,12 +545,14 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     pretty_execute "eups list -s"
 
     BUILD_STATUS=0
+    unset BUILD_ERROR
 
     # build libs; then build tests; then install.
     scons_tests $CUR_PACKAGE
     pretty_execute "scons -j $PARALLEL opt=3 python"
     if [ $RETVAL != 0 ]; then
-        print_error "Failure of Build/Load: $CUR_PACKAGE $REVISION"
+        BUILD_ERROR="failure of initial 'scons -j $PARALLEL opt=3 python' build."
+        print_error $BUILD_ERROR
         BUILD_STATUS=2
     elif [ $DO_TESTS = 0 -a "$SCONS_TESTS" = "tests" -a -d tests ]; then 
         # Built libs OK, want Tests built and run
@@ -556,12 +571,14 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
                 cat $FAILED_FILE
                 echo "================================================"
             done
-            print_error "Failure of 'tests' Build/Run for $CUR_PACKAGE $REVISION"
+            BUILD_ERROR="failure of 'scons opt=3 tests' build."
+            print_error $BUILD_ERROR
             BUILD_STATUS=4
         else   # Built libs OK, ran tests OK, now eups-install
             pretty_execute "scons  version=$REVISION opt=3 install current declare python"
             if [ $RETVAL != 0 ]; then
-                print_error "Failure of install: $CUR_PACKAGE $REVISION"
+                BUILD_ERROR="failure of install: 'scons  version=$REVISION opt=3 install current declare python' build."
+                print_error $BUILD_ERROR
                 BUILD_STATUS=3
             fi
             print "Success of Compile/Load/Test/Install: $CUR_PACKAGE $REVISION"
@@ -569,7 +586,8 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     else  # Built libs OK, no tests wanted|available, now eups-install
             pretty_execute "scons version=$REVISION opt=3 install current declare python"
             if [ $RETVAL != 0 ]; then
-                print_error "Failure of install: $CUR_PACKAGE $REVISION"
+                BUILD_ERROR="failure of install: 'scons version=$REVISION opt=3 install current declare python' build."
+                print_error $BUILD_ERROR
                 BUILD_STATUS=1
             fi
             print "Success during Compile/Load/Install with-tests: $CUR_PACKAGE $REVISION"
@@ -585,10 +603,10 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
             if [ -f "$LOG_FILE" ]; then
                 copy_log ${CUR_PACKAGE}_$REVISION/$LOG_FILE $LOG_FILE $LOG_DEST_HOST $LOG_DEST_DIR ${CUR_PACKAGE}/$REVISION $LOG_URL
             else
-                print "No $LOG_FILE present."
+                print_error "Warning: No $LOG_FILE present."
             fi
         else
-            print "No archive destination provided for log file."
+            print_error "Warning: No archive destination provided for log file."
         fi
     fi
 
@@ -599,8 +617,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
 
     # Time to exit due to build failure of a dependency
     if [ "$BUILD_STATUS" -ne "0" ]; then
-        FAIL_MSG="A build of dependency: $CUR_PACKAGE (version: $REVISION) failed.\nFailed to build HEAD-vs-HEAD version of $PACKAGE due to failed build of this dependency.\n\n"
-        print_error $FAIL_MSG
+        FAIL_MSG="\nBuildbot failed to build $PACKAGE Trunk-vs-Trunk due to an error building dependency: $CUR_PACKAGE.\n\nDependency: $CUR_PACKAGE (version: $REVISION) error:\n$BUILD_ERROR\n"
         # Get Email List for Package Owners & Blame list
         fetch_package_owners $CUR_PACKAGE
         fetch_blame_data $SCM_LOCAL_DIR $WORK_PWD 
@@ -609,8 +626,8 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
         else
            SEND_TO="$PACKAGE_OWNERS, $BLAME_EMAIL"
         fi
-        #emailFailure "$STEP_NAME" "$REVISION"  "$SEND_TO" 
-        emailFailure "$CUR_PACKAGE" "$REVISION"  "$SEND_TO" 
+        #emailFailure "$STEP_NAME" "$SEND_TO" 
+        emailFailure "$CUR_PACKAGE" "$SEND_TO" 
         clear_blame_data
 
         #   Following only necessary if failed during scons-install step
@@ -621,6 +638,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
             pretty_execute "eups undeclare -c $CUR_PACKAGE $REVISION"
         fi
         print_error "Exiting since $CUR_PACKAGE failed to build/install successfully"
+        
         exit 1
     fi
 
@@ -628,12 +646,12 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     print "-------------------------"
     setup -j $CUR_PACKAGE $REVISION
     if [ $? != 0 ]; then
-        print ""
+        print_error "Warning: unable to complete setup of installed $CUR_PACKAGE $REVISION. Continuing with package setup in local directory."
     fi
     eups list -v $CUR_PACKAGE $REVISION
     print "-------------------------"
     touch $SCM_LOCAL_DIR/BUILD_OK
-    [ $? != 0 ] && print "Failed to set flag: $SCM_LOCAL_DIR/BUILD_OK" 
+    [ $? != 0 ] && print_error "Warning: unable to set flag: $SCM_LOCAL_DIR/BUILD_OK; this source directory will be rebuilt on next use." 
 
 
 

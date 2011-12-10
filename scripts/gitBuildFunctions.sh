@@ -132,7 +132,7 @@ scm_url() {
 
     # Since version not supplied, will acquire git-master version's commit id
     RET_REVISION=`git ls-remote --refs -h $RET_SCM_URL | grep refs/heads/master | awk '{print $1}'`
-    if [[ $? != 0 ]]; then  
+    if [ $? != 0 ]; then  
         print_error "Failed getting git master commit id for package $1." 
         return 1 
     fi
@@ -309,14 +309,14 @@ copy_log() {
     local additional_dir=$5
     local url=$6
     if [ ! "$6" ]; then
-	print "not enough arguments to copy_log"
+        print "not enough arguments to copy_log"
     elif [ "$7" ]; then
-	print "too many arguments to copy_log"
+        print "too many arguments to copy_log"
     else
-	local url_suffix=$additional_dir/$date_dir/$filename
-	local remote_path=$remote_dir/$url_suffix
-	local dest=$dest_host:$remote_dir/$url_suffix
-	ssh $dest_host "mkdir -p $remote_dir/$additional_dir/$date_dir"
+        local url_suffix=$additional_dir/$date_dir/$filename
+        local remote_path=$remote_dir/$url_suffix
+        local dest=$dest_host:$remote_dir/$url_suffix
+        ssh $dest_host "mkdir -p $remote_dir/$additional_dir/$date_dir"
         echo "pwd is "$PWD
         #scp -q $filename $dest
         # put some HTML around the copied file so you it's formatted in the browser
@@ -325,17 +325,17 @@ copy_log() {
         echo "</PRE></BODY></HTML>" >>/tmp/foo.$$
         scp -q /tmp/foo.$$ $dest
  
-	if [ $? != 0 ]; then
-	    print_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-	    print_error "!!! Failed to copy $filename to $dest"
-	    print_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-	else
-	    ssh $dest_host "chmod +r $remote_path"
-	    if [ $url ]; then
-		# echo instead of print, because monitor class doesn't trim leading spaces
-		echo "log file $file_description saved to $url/$url_suffix"
-	    fi
-	fi
+        if [ $? != 0 ]; then
+            print_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+            print_error "!!! Failed to copy $filename to $dest"
+            print_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        else
+            ssh $dest_host "chmod +r $remote_path"
+            if [ $url ]; then
+            # echo instead of print, because monitor class doesn't trim leading spaces
+            echo "log file $file_description saved to $url/$url_suffix"
+            fi
+        fi
         rm /tmp/foo.$$
     fi
 }
@@ -445,7 +445,7 @@ prepareSCMDirectory() {
     # "Initialized empty Git repository in /nfs/lsst/home/buildbot/RHEL6/gitwork/builds/TvT/work/git/LSSTPipe/.git/"
     # and returns success!   
     # URL should exist because validated when $SCM_URL is defined. 
-    # However, still need to fix up following error check (on ssh timeout, etc)
+    # However, still need to fix up following error check (an ssh timeout, etc)
     #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
     verbose_execute $SCM_COMMAND
     if [ $RETVAL = 1 ] ; then
