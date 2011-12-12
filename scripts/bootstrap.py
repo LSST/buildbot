@@ -20,7 +20,7 @@ current_list = "http://dev.lsstcorp.org/pkgs/std/w12/current.list"
 # createGitURL(package) - create the Git URL for a given package
 #
 def createGitURL(package):
-	return "git@git.lsstcorp.org:LSST/DMS/"+package.replace("_","/")+".git"
+	return "git@git.lsstcorp.org:LSST/DMS/"+package+".git"
 
 ##
 # open a the current.list URL, and remove the first line, and any lines
