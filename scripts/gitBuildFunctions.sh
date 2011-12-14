@@ -348,6 +348,23 @@ scm_info() {
 }
 
 #---------------------------------------------------------------------------
+# - save the setup script for this package in a directory developers can
+#   use to reconstruct the buildbot environment.
+# $1 = root directory
+# $2 = eups package name
+# $3 = build number
+saveSetupScript()
+{
+    echo "saving script to $1/setup/build$3/setup_$2.sh"
+    mkdir -p $1/setup/build$3
+    setup_file=$1/setup/build$3/setup_$2
+    eups list -s | grep -v LOCAL: | awk '{print "setup -j -v "$1" "$2}'| grep -v $2 >$setup_file.lst
+    echo "# This package failed. Note the hash tag, to debug against the correct version." >> $setup_file.lst
+    eups list -s | grep $2 | awk '{print "# setup -j -v "$1" "$2}' >>$setup_file.lst
+    RET_SETUP_SCRIPT_NAME=$setup_file.lst
+}
+
+#---------------------------------------------------------------------------
 # -- setup package's **git-master** scm directory in preparation for 
 #        either extracting initial source tree to bootstrap dependency tree 
 #        or the build  and install the accurate deduced dependency tree

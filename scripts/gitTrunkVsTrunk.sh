@@ -6,8 +6,8 @@ LSST_STACK=/lsst/DC3/stacks/gcc445-RH6/28nov2011
 
 # URL pointing to the log files; used in emailed report
 # URL_BUILDERS="http://dev.lsstcorp.org/build/builders"
-# URL_BUILDERS="http://lsst-build.ncsa.illinois.edu:8010/builders"
-URL_BUILDERS="http://lsst-build4.ncsa.illinois.edu:8020/builders"
+#URL_BUILDERS="http://lsst-build4.ncsa.illinois.edu:8020/builders"
+URL_BUILDERS="http://lsst-build.ncsa.illinois.edu:8010/builders"
 
 #--------------------------------------------------------------------------
 usage() {
@@ -24,7 +24,6 @@ usage() {
     echo "                          eg \"buildbot@master:/var/www/html/logs\""
     echo "          --log_url <url>: URL prefix for the log destination,"
     echo "                          eg \"http://master/logs/\""
-    echo "    --builddir <instance>: identifies slave instance at \"slave/<name>\""
     echo "  --build_number <number>: buildbot's build number assigned to run"
     echo "    --slave_devel <path> : LSST_DEVEL=<path>"
     echo "             --production: setting up stack for production run"
@@ -112,6 +111,17 @@ emailFailure() {
     print_error $FAIL_MSG
 
     print "emailPackage = $emailPackage, STEP_NAME = $STEP_NAME"
+    # only send email out if
+    # 1) the package we're building is the same as the one that reported
+    #    the error
+    # OR
+    # 2) we're doing an "on_demand_build"
+    if [ "$emailPackage" != "$STEP_NAME" ]; then
+        if [ "$STEP_NAME" != "on_demand_build" ]; then
+            print "Not sending e-mail;  waiting to report until actual package build";
+            return 0
+        fi
+    fi
     MAIL_TO="$emailRecipients"
     URL_MASTER_BUILD="$URL_BUILDERS/$BUILDER_NAME/builds"
     EMAIL_SUBJECT="LSST automated build failure: package $emailPackage in $BUILDER_NAME"
@@ -133,7 +143,44 @@ cc: \"Mothra\" <$BUCK_STOPS_HERE>\n" \
     if  [ "$BLAME_EMAIL" != "" ] ; then
         printf "\n\
 $FAIL_MSG\n\
-You were notified because you are either the package's owner or its last modifier.\n\n\
+You were notified because you are either the package's owner or its last modifier.\n\n" \
+>> email_body.txt
+printf "\n\
+================================================\n\
+To reconstruct this environment do the following:\n\
+================================================\n\
+Please refer to the following page, for an explanation of the following
+and what to do in case of a problem:
+
+http://dev.lsstcorp.org/trac/wiki/Buildbot
+
+====
+Instructions
+====
+
+bash:
+
+$ source $LSST_STACK/loadLSST.sh\n\
+$ EUPS_PATH=$LSST_DEVEL:$LSST_STACK\n\
+$ source $RET_SETUP_SCRIPT_NAME\n\
+
+[t]csh:
+
+% source $LSST_STACK/loadLSST.csh\n\
+% set EUPS_PATH $LSST_DEVEL:$LSST_STACK\n\
+% source $RET_SETUP_SCRIPT_NAME\n\
+
+Go to your local copy of $emailPackage, run the command:
+
+setup -r . -k
+
+and debug there.
+\n"\
+>> email_body.txt
+printf "\n\
+=====================\n\
+Details of the error:
+=====================\n\
 The failure log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}/steps/$STEP_NAME/logs/stdio\n\
 The Continuous Integration build log is available at: ${URL_MASTER_BUILD}/${BUILD_NUMBER}\n\n\
 Commit log:\n" \
@@ -529,6 +576,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     # ----------------------------------------------------------------
     # -- Rest of build work is done within the package's source directory --
     # ----------------------------------------------------------------
+    BUILD_ROOT=$PWD
     cd $SCM_LOCAL_DIR 
     rm -f NEEDS_BUILD
 
@@ -543,6 +591,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     #fi
     pretty_execute "setup -r . -k "
     pretty_execute "eups list -s"
+    saveSetupScript $BUILD_ROOT $CUR_PACKAGE $BUILD_NUMBER
 
     BUILD_STATUS=0
     unset BUILD_ERROR

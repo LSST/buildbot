@@ -1,4 +1,5 @@
 #!/bin/sh
+umask 0002
 source $LSST_HOME/loadLSST.sh
 echo "sandbox should be at "$1
 if [ -d "$1" ]; then

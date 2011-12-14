@@ -9,7 +9,7 @@ import os
 ##
 # exclude these packages
 #
-exclude_pkgs=set(["lsst","lssteups","sconsUtils","LSSTPipe"])
+exclude_pkgs=set(["lsst","lssteups","sconsUtils","LSSTPipe", "lsstactive", "thirdparty_core"])
 
 ##
 # current_list is the URL of the distribution stack contents
