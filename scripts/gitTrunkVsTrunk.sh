@@ -166,9 +166,9 @@ $ source $RET_SETUP_SCRIPT_NAME\n\
 
 [t]csh:
 
-% source $LSST_STACK/loadLSST.csh\n\
-% set EUPS_PATH $LSST_DEVEL:$LSST_STACK\n\
-% source $RET_SETUP_SCRIPT_NAME\n\
+%% source $LSST_STACK/loadLSST.csh\n\
+%% set EUPS_PATH $LSST_DEVEL:$LSST_STACK\n\
+%% source $RET_SETUP_SCRIPT_NAME\n\
 
 Go to your local copy of $emailPackage, run the command:
 
