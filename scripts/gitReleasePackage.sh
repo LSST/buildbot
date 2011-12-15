@@ -80,12 +80,14 @@ if [ $INSTALL_SUCCEEDED != 0 ]; then
 #    exit 1
 fi
 
+print "dollar at is equal to $@"
+
 # check for packages
 if [ $INSTALL_SUCCEEDED == 0 ]; then
     step "Check for installed packages"
     for CHECK_PACKAGE in $@
       do
-      if [ $CHECK_PACKAGE != "lsstarchive" ]; then # a phantom package
+      if [ $CHECK_PACKAGE != "lsstactive" ]; then # a phantom package
 	  PACKAGE_COUNT=`eups list $CHECK_PACKAGE | wc -l`
 	  if [ $PACKAGE_COUNT = "1" ]; then
 	      echo "  - Package '$CHECK_PACKAGE' is installed."
