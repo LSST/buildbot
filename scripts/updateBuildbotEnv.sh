@@ -16,7 +16,7 @@ if [ -n "$EUPS_USERDATA" ]; then # if the EUPS_USERDATA var is set
     # if there is no startup.py file, create one with locking turned off.
     if [ ! -f "$EUPS_USERDATA/startup.py" ]; then 
         echo "hooks.config.site.lockDirectoryBase = None" >$EUPS_USERDATA/startup.py
-        echo "hooks.config.Eups.userTags += ["SCM"]" >>$EUPS_USERDATA/startup.py
+        echo 'hooks.config.Eups.userTags += ["SCM"]' >>$EUPS_USERDATA/startup.py
     else
         echo "$EUPS_USERDATA/startup.py exists, not overwriting"
     fi
