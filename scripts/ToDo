@@ -1,0 +1,62 @@
+BuildBot Issues:
+
+* getting the nightly release build working with the new distribution
+  server
+
+* authorized users designation in buildbot - who gets named in list?
+  Two possibilities:
+  1) use same list that's allowed write access to the svn/git repository; or
+  2) on user request and run manager approval,  addition of user id to a 
+     separately maintained run-weekly list.
+
+WORKING ON THIS NOW - srp >> * non-position dependent command line argument code that Steve created for one of the scripts, and getting that ported over to the other scripts
+
+* should the logs be put on some server which can be backed-up?
+
+WORKING ON THIS NOW - srp >> * gitRelease (update-Lsst-Stack master.cfg step) isn't working
+
+* email handling
+  * determining the guru recipients via either
+    * scons/eups tag per package
+    * trac components CC list
+  * removal of trac/wiki/PackageUsers for email addresses
+
+* use of manifest list for gitId vs using whatever is master at the moment
+
+* handling a dependency which is not in the current.list (i.e. a brand new 
+    package which has not been released yet) should be handled OK. However, 
+    there is  currently no way to build the un-Released package in its 
+    own name (as the root package) in the TrunkVsTrunk builds.  Someday when 
+    there is a better web interface for user triggers, entering new git
+    packages names should be included. (So e.g. afw can depend on unReleased 
+    package named in the invocation).
+
+* ensure that all buildbot VMs have the following defined and documented:
+        EUPS_USERDATA= <defined in master.cfg for each slave>
+        $cat $EUPS_USERDATA/startup.py
+          hooks.config.site.lockDirectoryBase = None
+
+========================================================================
+
+Buildbot Tests:
+* Fresh LSST Stack Build from Scratch; formerly Nightly Release;  (done)
+  possibly: "Public Distribution Build"
+  * triggered on periodic schedule  (weekly?)
+
+* Update LSST Stack Build; formerly Nightly Update (or somesuch)
+  * triggered on periodic schedule  (weekly?)
+
+* Integration Compilation Build; formerly TrunkVsTrunk; includes unit testing;  
+  * triggered on git update and             (done)
+  * triggered on periodic schedule (nightly)   (almost done)
+
+* Integration Build Test; K-T's short Orca run of either 
+  * LSST Calibration Pipeline or
+  * LSST Photometric Processing Pipeline.
+  * triggered on periodic schedule  (weekly?)
+
+* Git Master Doxygen Build  
+
+Dropped:
+* TrunkVsTrunkNoTest 
+

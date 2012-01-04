@@ -2,7 +2,7 @@
 # Build cross linked doxygen documents and load into website
 
 usage() {
-    echo "Usage: $0 destination url_prefix "
+    echo "Usage: $0 type destination url_prefix "
     echo "Build crosslinked doxygen documentation and install on LSST website."
     echo "          type: either \"trunk\" or \"current\""
     echo "   destination: an scp target -- username, host & directory to scp files to,"

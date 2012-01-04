@@ -4,7 +4,8 @@
 # Installation of Release Packages should occur in either:
 #  * the system space or 
 #  * alternate space named by: '-lsstdir' parameter
-unset LSST_DEVEL
+
+#unset LSST_DEVEL
 
 if [[ $1 == "" ]]
 then
@@ -57,18 +58,21 @@ INSTALL_PACKAGE=$1
 step "installing LSST package '$INSTALL_PACKAGE'"
 
 print "Before loadLSST.sh: LSST_HOME: $LSST_HOME   LSST_DEVEL: $LSST_DEVEL"
+print "Before loadLSST.sh: EUPS_PATH: $EUPS_PATH"
 source $LSST_DIR/loadLSST.sh
 if [ $? != 0 ]; then
     echo "loadLSST.sh failed"
     exit 1
 fi
 print "After loadLSST.sh: LSST_HOME: $LSST_HOME  LSST_DEVEL: $LSST_DEVEL"
+print "After loadLSST.sh: EUPS_PATH: $EUPS_PATH"
 
 if [ "$ASTROMETRY_NET_DATA" ]; then
 	eups declare astrometry_net_data $ASTROMETRY_NET_DATA -r $ASTROMETRY_NET_DATA_DIR
 fi
 
 pretty_execute lsstpkg install $EXTRA_ARGS $INSTALL_PACKAGE
+#pretty_execute eups --debug=raise distrib install $EXTRA_ARGS $INSTALL_PACKAGE
 INSTALL_SUCCEEDED=$RETVAL
 if [ $INSTALL_SUCCEEDED != 0 ]; then
     echo "install $INSTALL_PACKAGE failed"

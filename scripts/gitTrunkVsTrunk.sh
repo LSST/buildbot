@@ -68,6 +68,7 @@ package_is_special() {
 
     # 23 Nov 2011 installed toolchain since it's not in active.list, 
     #             required by tcltk but not an lsstpkg distrib package.
+    # 3 Jan 2012 removed '    -o $SPCL_PACKAGE = "base"  ' to force rebuild.
     if [ ${SPCL_PACKAGE:0:5} = "scons" \
         -o ${SPCL_PACKAGE} = "thirdparty_core"  \
         -o ${SPCL_PACKAGE} = "toolchain"  \
@@ -81,7 +82,6 @@ package_is_special() {
         -o $SPCL_PACKAGE = "ssd"  \
         -o $SPCL_PACKAGE = "mpfr"  \
         -o ${SPCL_PACKAGE:0:6} = "condor"  \
-        -o $SPCL_PACKAGE = "base"  \
         -o ${SPCL_PACKAGE:0:5} = "mops_"  \
         -o ${SPCL_PACKAGE:0:4} = "lsst" ]; then 
         return 0
@@ -353,8 +353,8 @@ PACKAGE_SCM_REVISION=$RET_REVISION
 # -- First, setup all dependencies for default system version of <package>
 # -- Second, re-setup only trunk of <package>, leaving dependencies as before
 # --   This sets stage for ordering dependencies based on setup versions  
-pretty_execute "setup --tag stable $PACKAGE"
-[[ $RETVAL != 0 ]] && print "Warning: unable to eups-setup the stable versions of dependent packages; perhaps $PACKAGE not yet LSST-Released."
+pretty_execute "setup --tag=beta $PACKAGE"
+[[ $RETVAL != 0 ]] && print "Warning: unable to eups-setup the beta versions of dependent packages; perhaps $PACKAGE not yet LSST-Released."
 
 cd $SCM_LOCAL_DIR
 pretty_execute "setup -r . -j "
@@ -386,7 +386,7 @@ if [ $? != 0 ]; then
     emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
     exit 1
 fi
-python ${0%/*}/gitOrderDependents.py -s  -t $TEMP_FILE $PACKAGE $PACKAGE_LOCAL_VERSION > $BOOT_DEPS
+python ${0%/*}/gitOrderDependents.py -f $TEMP_FILE $PACKAGE $PACKAGE_LOCAL_VERSION > $BOOT_DEPS
 if [ $? != 0 ]; then
     FAIL_MSG="Failed to build a dependency list for package: $PACKAGE $PACKAGE_LOCAL_VERSION."
     emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
@@ -438,6 +438,7 @@ while read CUR_PACKAGE CUR_VERSION CUR_DETRITUS; do
     # -------------------------------
     cd $SCM_LOCAL_DIR
     pretty_execute "setup -r . -j"
+    #pretty_execute "eups declare -r . -t SCM $CUR_PACKAGE $CUR_VERSION"
     if [ $? != 0 ]; then
         FAIL_MSG="Failed in eups-set of $CUR_PACKAGE @ $CUR_VERSION during first pass at dependency installation."
         emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
@@ -466,13 +467,14 @@ if [ $? != 0 ]; then
     emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
     exit 1
 fi
-python ${0%/*}/gitOrderDependents.py -s -t $TEMP_FILE $PACKAGE $PACKAGE_LOCAL_VERSION > $REAL_DEPS
+python ${0%/*}/gitOrderDependents.py -f $TEMP_FILE $PACKAGE $PACKAGE_LOCAL_VERSION > $REAL_DEPS
 if [ $? != 0 ]; then
     FAIL_MSG="Failed to build a dependency list for package: $PACKAGE $PACKAGE_LOCAL_VERSION."
     print_error $FAIL_MSG
     emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
     exit 1
 fi
+
 
 COUNT=0
 while read LINE; 
