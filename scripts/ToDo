@@ -36,6 +36,8 @@ WORKING ON THIS NOW - srp >> * gitRelease (update-Lsst-Stack master.cfg step) is
         $cat $EUPS_USERDATA/startup.py
           hooks.config.site.lockDirectoryBase = None
 
+* rework the dependency list determination to ensure that any products which were dependent on a changed/rebuilt package were also rebuilt.
+
 ========================================================================
 
 Buildbot Tests:
