@@ -69,7 +69,9 @@ package_is_special() {
     # 23 Nov 2011 installed toolchain since it's not in active.list, 
     #             required by tcltk but not an lsstpkg distrib package.
     # 3 Jan 2012 removed '    -o $SPCL_PACKAGE = "base"  ' to force rebuild.
+    # 4 Jan 2012 added obs_cfht since it has not been converted yet
     if [ ${SPCL_PACKAGE:0:5} = "scons" \
+        -o ${SPCL_PACKAGE} = "obs_cfht"  \
         -o ${SPCL_PACKAGE} = "thirdparty_core"  \
         -o ${SPCL_PACKAGE} = "toolchain"  \
         -o ${SPCL_PACKAGE:0:7} = "devenv_"  \
@@ -348,6 +350,21 @@ PACKAGE_SCM_REVISION=$RET_REVISION
 # the dependencies from the source tree.  Only then should the build
 # of the dependencies commence in the order specified.
 #***********************************************************************
+
+
+
+
+# /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+# /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+#   W O R K A R O U N D :   P E X _ C O N F I G   s e t u p   b y   h a n d
+# /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+setup pex_config
+# /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+# /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+
+
+
+
 
 # -- setup root package in prep for dependency list generation
 # -- First, setup all dependencies for default system version of <package>
