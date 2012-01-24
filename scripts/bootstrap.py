@@ -6,41 +6,51 @@
 #                current.list URL
 #
 import os
-##
-# exclude these packages
-#
-exclude_pkgs=set(["lsst","lssteups","sconsUtils","LSSTPipe", "lsstactive", "thirdparty_core"])
 
-##
-# current_list is the URL of the distribution stack contents
-#
-current_list = "http://dev.lsstcorp.org/pkgs/std/w12/current.list"
+class PackageList:
 
-##
-# createGitURL(package) - create the Git URL for a given package
-#
-def createGitURL(package):
-	return "git@git.lsstcorp.org:LSST/DMS/"+package+".git"
+    def __init__(self,**kwargs):
+        ##
+        # current_list is the URL of manifest for the lsstactive product, which
+        # includes all packages.
+        #
+        current_list = "http://dev.lsstcorp.org/cgi-bin/build/repolist.cgi"
+        
+        
+        ##
+        # open a the current.list URL, and remove the first line, and any lines
+        # containing "pseudo", "external", or that start with a comment character
+        #
+        stream = os.popen("curl -s "+current_list)
+        
+        ##
+        # read all the packages of the stream, and put them into a set, removing
+        # the excluded packages.
+        #
+        
+        pkgs = stream.read().split()
+        stream.close()
 
-##
-# open a the current.list URL, and remove the first line, and any lines
-# containing "pseudo", "external", or that start with a comment character
-#
-stream = os.popen("curl -s "+current_list+"| grep -v pseudo| grep -v external |  grep -v EUPS| awk '{print $1 ;}' | grep -v ^#")
+        
+        excluded_internal_list = "/lsst/home/buildbot/RHEL6/etc/excluded.txt"
+        stream = open(excluded_internal_list,"r")
+        excluded_internal_pkgs = stream.read().split()
+        stream.close()
 
-##
-# read all the packages of the stream, and put them into a set, removing
-# the excluded packages.
-#
-pkgs = stream.read()
-pkg_list = set(pkgs.split())-exclude_pkgs
+        self.pkg_list = []
+        for name in pkgs:
+            if (name in excluded_internal_pkgs) == False:
+                index = name.rfind(".git")
+                self.pkg_list.append(name[:index])
+        
+        
+    def getPackageList(self):
+        return self.pkg_list
 
-##
-# open each of the packages at the distribution stack URL, look up the hash
-# tag for the trunk, and output the package name and hash take to STDOUT
-#
-for pkg in pkg_list:
-    gitURL = createGitURL(pkg)
+p = PackageList()
+ps = p.getPackageList()
+for pkg in ps:
+    gitURL = "git@git.lsstcorp.org:LSST/DMS/"+pkg+".git"
     try:
         stream=os.popen("git ls-remote --refs -h "+ gitURL +" | grep refs/heads/master | awk '{print $1}'")
         hashTag = stream.read()

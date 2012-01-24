@@ -285,7 +285,38 @@ pretty_execute() {
     else
 	# save to buffer to preserve command's exit value (sending straight
 	# to awk would give us awk's exit value, which will always be 0)
-	local cmd="$@ > $tmp_out 2> $tmp_err"
+	local cmd="$@ \> $tmp_out 2> $tmp_err"
+	eval $cmd
+	#$@ > $tmp_out 2> $tmp_err
+	RETVAL=$?
+	echo "cat $tmp_out | $awk_cmd_out" > $tmp_cmd
+	source $tmp_cmd
+	echo "cat $tmp_err | $awk_cmd_err" > $tmp_cmd
+	source $tmp_cmd
+	rm -f $tmp_cmd $tmp_out $tmp_err
+    fi
+}
+
+pretty_execute2() {
+    local awk_cmd_out="awk '{print \" > \"\$0}'"
+    local awk_cmd_err="awk '{print \" - \"\$0}'"
+    # This command doesn't work, because bash doesn't parse the "|"
+    # properly in this context:
+    # $@ | $awk_cmd
+    # So we have to do this the hard way:
+    local tmp_prefix="_tmp_build_functions_pretty"
+    local tmp_cmd="${tmp_prefix}_cmd.tmp"
+    local tmp_out="${tmp_prefix}_stdout.tmp"
+    local tmp_err="${tmp_prefix}_stderr.tmp"
+    if [ "$anon" = "" ]; then print $@; fi
+    if [ -f $tmp_cmd -o -f $tmp_out -o -f $tmp_err ]; then
+	#print "*** Unable to pretty-print: $tmp_cmd, $tmp_out, or $tmp_err exists. ***"
+	$@
+	RETVAL=$?
+    else
+	# save to buffer to preserve command's exit value (sending straight
+	# to awk would give us awk's exit value, which will always be 0)
+	local cmd="$@ \> $tmp_out 2> $tmp_err"
 	eval $cmd
 	RETVAL=$?
 	echo "cat $tmp_out | $awk_cmd_out" > $tmp_cmd

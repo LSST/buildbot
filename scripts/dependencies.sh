@@ -6,4 +6,4 @@ source $LSST_HOME/loadLSST.sh
 which python
 echo $PYTHON_PATH
 eups list
-python $BUILDBOT_HOME/scripts/dependencies.py
+python $BUILDBOT_HOME/scripts/dependencies.py $*

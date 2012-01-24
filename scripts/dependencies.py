@@ -20,8 +20,8 @@ class PackageDependency:
         for dep in dependencies:
             package = dep[0].name
             version = dep[0].version
-            if version == None:
-                continue
+            #if version == None:
+            #    continue
             if package not in self.externals:
                 if package in self.global_pkgs:
                     if depth > self.global_pkgs[package]:
@@ -34,12 +34,13 @@ class PackageDependency:
                 self.externals[package] = version
         return
 
-    def getDependencyList(self, package, version):
+    def getDependencyList(self, package, version, tags):
         self.global_pkgs = {}
 
         self.global_pkgs[package] = 1
         
         myeups = eups.Eups()
+        myeups.selectVRO(tags)
         
         self.gather(myeups, package, version, 2)
         
@@ -52,7 +53,7 @@ class PackageDependency:
         self.externals = {}
         self.global_pkgs = {}
 
-        eups_path=['/lsst/home/buildbot/.eups']
+        eups_path=['/lsst/home/buildbot/RHEL6/buildslaves/lsst-build2/srpTvT/eups_userdata']
         
         for name in os.listdir("/lsst/DC3/stacks/gcc445-RH6/28nov2011/Linux64/external"):
             self.externals[name] = "unknown"
@@ -73,21 +74,25 @@ class sp:
             line = input.readline()
         return list
 
-    def createDependencyLists(self):
+    def createDependencyLists(self, tags):
         self.manifest = self.readFileIntoList("manifest.list")
         print "self.manifest is ",self.manifest
         for pkg in self.manifest:
             name = pkg
             version = self.manifest[name]
             p = PackageDependency()
-            list = p.getDependencyList(name,version)
+            list = p.getDependencyList(name,version, tags)
+            print "name = ",name
+            for i in list:
+                print i
+            print "++++"
             self.package_info[name] = list
             print "Writing dependency lists for "+name+" "+version
             f = open("git/"+name+"/"+version+"/internal.deps","w")
             for info in list:
                 if info[0] in self.manifest:
                     print "internal "+info[0],self.manifest[info[0]]
-                    f.write("%s %s\n" % (info[0],self.manifest[info[0]]))
+                    f.write("%d %s %s\n" % (info[1], info[0],self.manifest[info[0]]))
                 else:
                     print "unknown internal "+info[0]
             f.close()
@@ -142,12 +147,13 @@ class sp:
 
 
 p = sp()
-if p.createDependencyLists() is False:
+if p.createDependencyLists(sys.argv[1:]) is False:
     print "error creating dependency lists"
 else:
     list = p.createNeedsBuildList()
 
     print "these need to be built"
+    print list
     for name in list:
             print name+" "+list[name]
 
