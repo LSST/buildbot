@@ -285,10 +285,10 @@ pretty_execute() {
     else
 	# save to buffer to preserve command's exit value (sending straight
 	# to awk would give us awk's exit value, which will always be 0)
-	local cmd="$@ \> $tmp_out 2> $tmp_err"
+	cmd="$@ > $tmp_out 2> $tmp_err"
 	eval $cmd
-	#$@ > $tmp_out 2> $tmp_err
 	RETVAL=$?
+	echo "DEBUG: PWD = $PWD ; cat $tmp_out | $awk_cmd_out;tmp_cmd = $tmp_cmd"
 	echo "cat $tmp_out | $awk_cmd_out" > $tmp_cmd
 	source $tmp_cmd
 	echo "cat $tmp_err | $awk_cmd_err" > $tmp_cmd
@@ -298,8 +298,14 @@ pretty_execute() {
 }
 
 pretty_execute2() {
-    local awk_cmd_out="awk '{print \" > \"\$0}'"
-    local awk_cmd_err="awk '{print \" - \"\$0}'"
+set -x
+    if [ "$1" = "-anon" ]; then
+	local anon=true
+	shift
+    fi
+    local spaces="${SPACES:0:$INDENT}"
+    local awk_cmd_out="awk '{print \"$spaces  > \"\$0}'"
+    local awk_cmd_err="awk '{print \"$spaces  - \"\$0}'"
     # This command doesn't work, because bash doesn't parse the "|"
     # properly in this context:
     # $@ | $awk_cmd
@@ -316,15 +322,23 @@ pretty_execute2() {
     else
 	# save to buffer to preserve command's exit value (sending straight
 	# to awk would give us awk's exit value, which will always be 0)
-	local cmd="$@ \> $tmp_out 2> $tmp_err"
-	eval $cmd
+	$@ > $tmp_out 2> $tmp_err
+    if [ -f $tmp_out ]; then
+        echo "output file created"
+    else
+        echo "output file NOT created"
+    fi
+    
 	RETVAL=$?
+	echo "DEBUG: PWD = $PWD ; cat $tmp_out | $awk_cmd_out;tmp_cmd = $tmp_cmd"
 	echo "cat $tmp_out | $awk_cmd_out" > $tmp_cmd
+    chmod +x $tmp_cmd
 	source $tmp_cmd
 	echo "cat $tmp_err | $awk_cmd_err" > $tmp_cmd
 	source $tmp_cmd
-	rm -f $tmp_cmd $tmp_out $tmp_err
+	#rm -f $tmp_cmd $tmp_out $tmp_err
     fi
+set +x
 }
 
 #---------------------------------------------------------------------------
@@ -384,14 +398,28 @@ scm_info() {
 # $1 = root directory
 # $2 = eups package name
 # $3 = build number
+# $4 = failed build directory
+
+# NOTE:  This is the way it was done before RHL suggested we could 
+#        simplify it.  Below this is the refined version.
+#saveSetupScript()
+#{
+#    echo "saving script to $1/setup/build$3/setup_$2.sh"
+#    mkdir -p $1/setup/build$3
+#    setup_file=$1/setup/build$3/setup_$2
+#    eups list -s | grep -v LOCAL: | awk '{print "setup -j -v "$1" "$2}'| grep -v $2 >$setup_file.lst
+#    echo "# This package failed. Note the hash tag, to debug against the correct version." >> $setup_file.lst
+#    eups list -s | grep $2 | awk '{print "# setup -j -v "$1" "$2}' >>$setup_file.lst
+#    RET_SETUP_SCRIPT_NAME=$setup_file.lst
+#}
+
 saveSetupScript()
 {
     echo "saving script to $1/setup/build$3/setup_$2.sh"
     mkdir -p $1/setup/build$3
     setup_file=$1/setup/build$3/setup_$2
-    eups list -s | grep -v LOCAL: | awk '{print "setup -j -v "$1" "$2}'| grep -v $2 >$setup_file.lst
-    echo "# This package failed. Note the hash tag, to debug against the correct version." >> $setup_file.lst
-    eups list -s | grep $2 | awk '{print "# setup -j -v "$1" "$2}' >>$setup_file.lst
+    eups list -s >$setup_file.lst
+    RET_FAILED_PACKAGE_DIRECTORY=$4
     RET_SETUP_SCRIPT_NAME=$setup_file.lst
 }
 
