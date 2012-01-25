@@ -171,10 +171,15 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
 
     if  [ -f "git/$CUR_PACKAGE/$CUR_VERSION/BUILD_OK" ] ; then
         [[ "$DEBUG" ]] && print "Local src directory is marked BUILD_OK"
-        pretty_execute "setup -j  $CUR_PACKAGE $CUR_VERSION"
+        # srp - jan 24 2012 - change next line to get current version which
+        # is already installed.
+        #pretty_execute "setup -j  $CUR_PACKAGE $CUR_VERSION"
+        pretty_execute "setup -k -t current $CUR_PACKAGE"
         print "after setup in OK check, RETVAL = $RETVAL"
         if [ $RETVAL = 0 ] ; then
             print "Package/revision is already completed. Skipping build."
+            print "using this version:"
+            pretty_execute "eups list -s $CUR_PACKAGE"
             continue
         fi
     else
@@ -225,18 +230,18 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
             print_error $BUILD_ERROR
             BUILD_STATUS=4
         else   # Built libs OK, ran tests OK, now eups-install
-            pretty_execute "scons  version=$REVISION opt=3 install current declare python"
+            pretty_execute "scons  version=$REVISION+$BUILD_NUMBER opt=3 install current declare python"
             if [ $RETVAL != 0 ]; then
-                BUILD_ERROR="failure of install: 'scons  version=$REVISION opt=3 install current declare python' build."
+                BUILD_ERROR="failure of install: 'scons  version=$REVISION+$BUILD_NUMBER opt=3 install current declare python' build."
                 print_error $BUILD_ERROR
                 BUILD_STATUS=3
             fi
             print "Success of Compile/Load/Test/Install: $CUR_PACKAGE $REVISION"
         fi
     else  # Built libs OK, no tests wanted|available, now eups-install
-            pretty_execute "scons version=$REVISION opt=3 install current declare python"
+            pretty_execute "scons version=$REVISION+$BUILD_NUMBER opt=3 install current declare python"
             if [ $RETVAL != 0 ]; then
-                BUILD_ERROR="failure of install: 'scons version=$REVISION opt=3 install current declare python' build."
+                BUILD_ERROR="failure of install: 'scons version=$REVISION+$BUILD_NUMBER opt=3 install current declare python' build."
                 print_error $BUILD_ERROR
                 BUILD_STATUS=1
             fi
@@ -294,11 +299,17 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
 
     # For production build, setup each successful install 
     print "-------------------------"
-    setup -j $CUR_PACKAGE $CUR_VERSION
+    # srp - jan 24 2012 - change next line to get current version which
+    # is already installed.
+    #setup -j $CUR_PACKAGE $CUR_VERSION
+    setup -t current $CUR_PACKAGE
     if [ $? != 0 ]; then
         print_error "Warning: unable to complete setup of installed $CUR_PACKAGE $CUR_VERSION. Continuing with package setup in local directory."
     fi
-    eups list -v $CUR_PACKAGE $REVISION
+    # srp - jan 24 2012 - change next line to get current version which
+    # is already installed.
+    #eups list -v $CUR_PACKAGE $REVISION
+    eups list -t current -v $CUR_PACKAGE
     print "-------------------------"
     #echo "touch $SCM_LOCAL_DIR/BUILD_OK"
     #touch $SCM_LOCAL_DIR/BUILD_OK
@@ -310,6 +321,7 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
     else
         print_error "Warning: unable to set flag: $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_OK; this source directory will be rebuilt on next use." 
     fi
+    echo "EUPS_PATH is $EUPS_PATH"
     echo "Finished working with $CUR_PACKAGE $CUR_VERSION"
 
 # -------------------------------------------------
