@@ -1,64 +1,192 @@
-BuildBot Issues:
+Last updated: 26 Jan 2012
 
-* getting the nightly release build working with the new distribution
-  server
 
-* authorized users designation in buildbot - who gets named in list?
-  Two possibilities:
-  1) use same list that's allowed write access to the svn/git repository; or
-  2) on user request and run manager approval,  addition of user id to a 
-     separately maintained run-weekly list.
+BuildBot Implementation Specifics
+* Determine if builders' *on-demand start* should be restricted from public 
+  * Should some builders be restricted from public start and not others
+  * Possibly, determine selection criteria for choosing authorized users of 
+    on-demand run-weekly builder.  
+    Two possibilities:
+    1) use same list that's allowed write access to the svn/git repository; or
+    2) on user request and run manager approval, add user id to a 
+       separately maintained run-weekly list. 
+  (13 Jan 12: TBD)
+  SRP NOTE: Starting builds should be restricted from the public.
 
-WORKING ON THIS NOW - srp >> * non-position dependent command line argument code that Steve created for one of the scripts, and getting that ported over to the other scripts
+* Determine what build products, logs, etc should be archived, then implement.
+  (13 Jan 12: TBD)
 
-* should the logs be put on some server which can be backed-up?
+* gitRelease (update-Lsst-Stack master.cfg step) fails with known eups bug.
+  (13 Jan 12: TBD; Ticket issued)
 
-WORKING ON THIS NOW - srp >> * gitRelease (update-Lsst-Stack master.cfg step) isn't working
+* A dependency which is not in the current.list (i.e. a brand new package 
+  which has not been released yet) should be detected in dependency list
+  generation and then processed with the rest of the dependencies. 
+  (13 Jan 12: IN PROGRESS, some of this is done.  need to convert to a CGI
+  script so buildmaster and buildslave(s) have access to the same list)
+
+* Trigger Package Build on entry of package name should allow previously 
+  unknown git package name. 
+  (13 Jan 12:  TBD)
+
+* non-position dependent command line argument code that Steve created for one of the scripts, and getting that ported over to the other scripts 
+  (13 Jan 12: SOME DONE: gitTrunkVsTrunk.sh, runProduction.sh; TBD all the rest)
 
 * email handling
   * determining the guru recipients via either
     * scons/eups tag per package
     * trac components CC list
-  * removal of trac/wiki/PackageUsers for email addresses
-
-* use of manifest list for gitId vs using whatever is master at the moment
-
-* handling a dependency which is not in the current.list (i.e. a brand new 
-    package which has not been released yet) should be handled OK. However, 
-    there is  currently no way to build the un-Released package in its 
-    own name (as the root package) in the TrunkVsTrunk builds.  Someday when 
-    there is a better web interface for user triggers, entering new git
-    packages names should be included. (So e.g. afw can depend on unReleased 
-    package named in the invocation).
+  * chosen:  last git modifier & special lsst-build notification list
+  (13 Jan 12: MOSTLY DONE; need to add special lsst-build alias)
 
 * ensure that all buildbot VMs have the following defined and documented:
         EUPS_USERDATA= <defined in master.cfg for each slave>
         $cat $EUPS_USERDATA/startup.py
           hooks.config.site.lockDirectoryBase = None
+  (13 Jan 12: DONE; all new builders must invoke: 'update buildbot environment')
 
-* rework the dependency list determination to ensure that any products which were dependent on a changed/rebuilt package were also rebuilt.
+* Getting the nightly release build working with the new distribution server  
+  (13 Jan 12: DONE)
+
+* Use of manifest list for gitId at start of build process versus using 
+  whatever is master at the moment of a build step.
+  (13 Jan 12: DONE)
+
+Buildbot Builders
+ * Integration and Test of Individual Packages
+    * All Packages Build&Test (run nightly or On Demand)
+        * of Master package vs Master stack {VRO->Master,Beta, Stable}
+          * Name: "Full Trunk Vs Trunk"
+          * Status: master DONE, slave IN PROGRESS
+          * Note: success triggers Master doxygen documentation build
+          * Note: success triggers build-verify Master production run
+
+        * of Beta package vs Beta stack {VRO->Beta, Stable)
+          * Name: "Full Beta Vs Beta"
+          * Status: TBD
+          * Note: success triggers Beta doxygen documentation build
+          * Note: success triggers build-verification Beta production run
+   
+        * of Interesting Tag package vs Interesting Tag stack {VRO->ITag,Master,Beta,Stable} (triggered from web form)
+          * Name: "Full ITag Vs ITag"
+          * Status: TBD  (not yet(!) recommended by developers)
+          * Note: success triggers ITag doxygen documentation build
+          * Note: success triggers build-verification ITag production run
+   
+    * Single Package Build&Test  (run On Demand, triggered on git change)
+        * of a Master package {VRO->Master,Beta, Stable}
+          * Name: "On Demand Trunk Vs Trunk"
+          * Status: master/slave DONE
+   
+ * Integration and Test of Pipeline Processing
+    * Weekly Production Run testing DRP (run On Demand)
+        * of Master build-products
+          * Name: "Master DRP Weekly"
+          * Status: master trigger&On Demand TBD, slave IN PROGRESS
+
+        * of Beta build-products
+          * Name: "Beta DRP Weekly"
+          * Status: Later; TBD
+
+        * of Released build-products
+          * Name: "Release DRP Weekly"
+          * Status: Later; TBD
+   
+ * Validation of Release Stack Installation
+    * Released-Product Installation
+      * Name: "Nightly Release Build"
+      * Status: master/slave DONE
+   
+ * Doxygen documentation build (triggered on I&T build success)
+    * Master doxygen documentation build
+      * Name: "Trunk Doxygen"
+      * Status: slave DONE, master trigger TBD
+
+    * Release doxygen documentation build
+      * Name: "Release Doxygen"
+      * Status: slave DONE, master trigger TBD
+
+    * Beta doxygen documentation build
+      * Name: "Beta Doxygen"
+      * Status: TBD
+
+    * Interesting Tag documentation build
+      * Name: "One-off Tag Doxygen"
+      * Status: TBD (developer recommended)
+
+
+Winter 2012 Milestones for Buildbot Scripts 
+  Extracted: http://dev.lsstcorp.org/trac/wiki/Winter2012/DevelToolRequirements
+
+* Task: Review and rewrite the buildbot scripts to fix the issues below:
+  * build in parallel,
+    * Status: DONE for build, NEVER for unit testing due to race conditions
+  * use ccache,
+    * Status: (ON HOLD - looked at this, but set at a low priority
+               compared to other tasks).
+  * simplify dependency management,
+    * Status: DONE
+  * send mail on failure
+    * Status: DONE
+  * create tickets on failure
+    * Status: TBD 
+  * ensure easily switched to a new compiler or OS
+    * Status: DONE; switch to new gcc version and new OS was not a problem;
+              it was a problem for the code it operates upon, though
+
+* Task: Build buildbot script that builds a just-tagged package against its declared dependencies.
+  * Status: DONE
+
+* Task: Extend above script to check package's ABI against its previous version
+  * if no change, rebuild all packages depending on the just-tagged package.
+    * use an ABI checker such as  
+      http://ispras.linux-foundation.org/index.php/ABI_compliance_checker and,
+    * Status: TBD; currently implemented to determine the set of all packages
+                   depending on a given package and rebuild all those. Also,
+                   the ABI checker at URL above doesn't exist.
+
 
 ========================================================================
+========================================================================
+========================================================================
+Note added: 12 Jan 2012
+For the venerable gitTrunkVsTrunk.sh, to salt the system with a brand-new 
+package by hand:
+  $ lsst5
+  cd ~/RHEL6/gitwork/builds/TvT/work/git
+  mkdir <newpkg>
+  cd <newpkg>
+  ## determine the gitid of the <newpkg> master
+  git clone --depth=1 $LSST_DMS/<newpkg>.git <gitId>
+  setup -r . <newpkg>
+  scons
+  eups declare -c -r . <newpkg> <gitid>
+  eups list -c <newpkg>   # Check <newpkg> exists, is current, & NOT LOCAL:
+  
+========================================================================
+Note added: 13 Jan 2012
 
-Buildbot Tests:
-* Fresh LSST Stack Build from Scratch; formerly Nightly Release;  (done)
-  possibly: "Public Distribution Build"
-  * triggered on periodic schedule  (weekly?)
+Google Chromium Buildbot Waterfall Doco:
+http://www.chromium.org/developers/testing/chromium-build-infrastructure/tour-of-the-chromium-buildbot
 
-* Update LSST Stack Build; formerly Nightly Update (or somesuch)
-  * triggered on periodic schedule  (weekly?)
+Discusses additional builder configurations which may come of interest to LSST:
+ * define incremental builder which builds only  changed packages and other 
+   libs which are dependent on those changed packages.
+   This is our current 'Full' build scenario
+ * define full rebuild builders which start from scratch and build in a 
+   totally 'cleaned' environment.  This would just need to add an additional 
+   build step to sanitize the environment then could trigger the 
+   incremental builder mentioned above.
 
-* Integration Compilation Build; formerly TrunkVsTrunk; includes unit testing;  
-  * triggered on git update and             (done)
-  * triggered on periodic schedule (nightly)   (almost done)
 
-* Integration Build Test; K-T's short Orca run of either 
-  * LSST Calibration Pipeline or
-  * LSST Photometric Processing Pipeline.
-  * triggered on periodic schedule  (weekly?)
+Document also provides: definition of terms, a clear description of each build ,etc. Good prototype.
+    
+========================================================================
+========================================================================
+========================================================================
 
-* Git Master Doxygen Build  
 
-Dropped:
-* TrunkVsTrunkNoTest 
+========================================================================
+========================================================================
+========================================================================
 
