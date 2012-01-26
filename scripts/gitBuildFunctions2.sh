@@ -143,7 +143,6 @@ package_is_special() {
 # return: 0  
 
 emailFailure() {
-    return
     local emailPackage=$1; shift
     local emailRecipients=$*;
 

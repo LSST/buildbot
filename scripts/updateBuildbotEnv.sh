@@ -1,5 +1,5 @@
 #!/bin/sh
-umask 0002
+umask 002
 source $LSST_HOME/loadLSST.sh
 echo "sandbox should be at "$1
 if [ -d "$1" ]; then
@@ -8,6 +8,9 @@ else
     mkdir -p $1
     mksandbox $1
 fi
+# make sure the parent directory of the sandbox is accessible.  Buildbot
+# ignores the umask settings when it is created.
+chmod og+rx $1/..
 
 echo "EUPS_USERDATA is set to: $EUPS_USERDATA"
 if [ -n "$EUPS_USERDATA" ]; then # if the EUPS_USERDATA var is set

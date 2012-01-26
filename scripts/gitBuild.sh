@@ -183,7 +183,22 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
             continue
         fi
     else
-        print "Local src directory is NOT marked BUILD_OK, so this package needs to be built."
+        print "Local src directory is NOT marked BUILD_OK, so we need to check if this package can be built."
+    fi
+
+    UNRELEASED_PACKAGE=`grep -w $CUR_PACKAGE $WORK_PWD/unreleased.txt`
+
+    if [ "$UNRELEASED_PACKAGE" != "" ]; then
+        echo "This is probably a new unreleased package, so we need to build it."
+    else
+        if [ "$CUR_PACKAGE" == $STEP_NAME ]; then
+            echo "This is the target package for building.  Continuing."
+        else
+            echo "This package is a dependent package that was not marked as a"
+            echo "successful build in its step.  Stopping build."
+            exit 2
+
+        fi
     fi
 
     step "Building $CUR_PACKAGE $CUR_VERSION"

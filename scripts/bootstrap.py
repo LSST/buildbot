@@ -2,8 +2,7 @@
 
 ###
 # bootstrap.py - output all the package names and current trunk git 
-#                hash tags for packages listed in the distribution server's
-#                current.list URL
+#                hash tags for packages
 #
 import os
 
@@ -17,9 +16,6 @@ class PackageList:
         current_list = "http://dev.lsstcorp.org/cgi-bin/build/repolist.cgi"
         
         
-        ##
-        # open a the current.list URL, and remove the first line, and any lines
-        # containing "pseudo", "external", or that start with a comment character
         #
         stream = os.popen("curl -s "+current_list)
         
@@ -32,6 +28,7 @@ class PackageList:
         stream.close()
 
         
+        # read in a list of packages we know are excluded.
         excluded_internal_list = "/lsst/home/buildbot/RHEL6/etc/excluded.txt"
         stream = open(excluded_internal_list,"r")
         excluded_internal_pkgs = stream.read().split()
