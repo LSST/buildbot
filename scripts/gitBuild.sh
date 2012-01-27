@@ -23,7 +23,7 @@ source ${0%/*}/gitBuildFunctions2.sh
 # -- get arguments --
 # -------------------
 
-options=$(getopt -l verbose,boot,force,dont_log_success,log_dest:,log_url:,builder_name:,build_number:,slave_devel:,production,no_tests,parallel:,package:,step_name: -- "$@")
+options=$(getopt -l verbose,boot,force,dont_log_success,log_dest:,log_url:,builder_name:,build_number:,slave_devel:,production,no_tests,parallel:,package:,step_name:,on_demand -- "$@")
 
 LOG_SUCCESS=0
 BUILDER_NAME=""
@@ -32,6 +32,7 @@ PRODUCTION_RUN=1
 DO_TESTS=0
 PARALLEL=2
 STEP_NAME="unknown"
+ON_DEMAND_BUILD=0
 while true
 do
     case $1 in
@@ -58,6 +59,8 @@ do
         --parallel) PARALLEL=$2; shift 2;;
         --package) PACKAGE=$2; shift 2;;
         --step_name) STEP_NAME=$2; shift 2;;
+        --step_name) STEP_NAME=$2; shift 2;;
+        --on_demand) ON_DEMAND_BUILD=1; shift 1;;
         *) echo "parsed options; arguments left are: $*"
              break;;
     esac
@@ -134,31 +137,20 @@ step "List build dependency tree for $PACKAGE"
 cat $EXTERNAL_DEPS
 cat $INTERNAL_DEPS
 
-step "Setup external dependencies for $PACKAGE"
-while read CUR_PACKAGE CUR_VERSION; do
-    pretty_execute "setup $CUR_PACKAGE $CUR_VERSION"
-    if [ $? != 0 ]; then
-        FAIL_MSG="Failed in eups-set of $CUR_PACKAGE @ $CUR_VERSION during first pass at dependency installation."
-    fi
-done < "$EXTERNAL_DEPS"
-
-
-#step "Setup internal dependencies for $PACKAGE"
-#while read CUR_PACKAGE CUR_VERSION; do
-#    cd $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION
-#    pretty_execute "setup -r . -j"
-#    if [ $? != 0 ]; then
-#        FAIL_MSG="Failed in eups-set of $CUR_PACKAGE @ $CUR_VERSION during first pass at dependency installation."
-#        emailFailure "$CUR_PACKAGE" "$BUCK_STOPS_HERE"
-#    fi
-#    eups list  | grep "^$CUR_PACKAGE "
-#done < "$INTERNAL_DEPS"
-
-echo "EUPS listing of setup packages:"
-eups list -s
-
 while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
     cd $WORK_PWD
+    step "Setup external dependencies for $CUR_PACKAGE"
+    while read EX_CUR_PACKAGE EX_CUR_VERSION; do
+        pretty_execute "setup $EX_CUR_PACKAGE $EX_CUR_VERSION"
+        if [ $? != 0 ]; then
+            FAIL_MSG="Failed in eups-set of $EX_CUR_PACKAGE @ $EX_CUR_VERSION during first pass at dependency installation."
+        fi
+    done < "$EXTERNAL_DEPS"
+
+
+
+    echo "EUPS listing of setup packages:"
+    eups list -s
 
     step "Checking $CUR_PACKAGE $CUR_VERSION status"
     # ---------------------------------------------------------------------
@@ -186,18 +178,20 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
         print "Local src directory is NOT marked BUILD_OK, so we need to check if this package can be built."
     fi
 
-    UNRELEASED_PACKAGE=`grep -w $CUR_PACKAGE $WORK_PWD/unreleased.txt`
+    if [ "$ON_DEMAND_BUILD" == "0" ]; then
+        UNRELEASED_PACKAGE=`grep -w $CUR_PACKAGE $WORK_PWD/unreleased.txt`
 
-    if [ "$UNRELEASED_PACKAGE" != "" ]; then
-        echo "This is probably a new unreleased package, so we need to build it."
-    else
-        if [ "$CUR_PACKAGE" == $STEP_NAME ]; then
-            echo "This is the target package for building.  Continuing."
+        if [ "$UNRELEASED_PACKAGE" != "" ]; then
+            echo "This is probably a new unreleased package, so we need to build it."
         else
-            echo "This package is a dependent package that was not marked as a"
-            echo "successful build in its step.  Stopping build."
-            exit 2
-
+            if [ "$CUR_PACKAGE" == $STEP_NAME ]; then
+                echo "This is the target package for building.  Continuing."
+            else
+                echo "This package is a dependent package that was not marked as a"
+                echo "successful build in its step.  Stopping build."
+                exit 2
+    
+            fi
         fi
     fi
 
