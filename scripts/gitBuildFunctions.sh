@@ -418,7 +418,7 @@ saveSetupScript()
     echo "saving script to $1/setup/build$3/setup_$2.sh"
     mkdir -p $1/setup/build$3
     setup_file=$1/setup/build$3/setup_$2
-    eups list -s >$setup_file.lst
+    eups list -s | grep -v LOCAL:  >$setup_file.lst
     RET_FAILED_PACKAGE_DIRECTORY=$4
     RET_SETUP_SCRIPT_NAME=$setup_file.lst
 }
