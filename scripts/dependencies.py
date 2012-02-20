@@ -5,21 +5,35 @@ import eups.Eups
 import operator
 import os,string
 
+# Select the extent of the debug messages: 'True' provides more output.
+DEBUG = True
+#DEBUG = False
 
 class PackageDependency:
 
-    def gather(self,myeups,pkg,ver,depth):
-    #    print "-"*depth,"CALLED: %s,%s depth = %d" % (pkg,ver,depth)
+    def gather(self,myeups,pkg,ver,depth,tags):
+        #print "-"*depth,"CALLED: %s,%s depth = %d" % (pkg,ver,depth)
     
-        try:
-            prod = myeups.getProduct(pkg,ver)
-        except:
+        if pkg is "implicitProducts":
             return
+
+        prod = myeups.findSetupProduct(pkg)
+        if not prod:
+            print "%s is not setup, maybe it's a new external" % (pkg)
+            try:
+                prod = myeups.getProduct(pkg,ver)
+            except:
+                print "FAILURE: %s %s is not found in any stack" % (pkg,ver)
+                return
+            
         tbl = prod.getTable()
+        myeups.selectVRO(tags)
         dependencies = tbl.dependencies(myeups,recursionDepth=1)
         for dep in dependencies:
             package = dep[0].name
             version = dep[0].version
+            if DEBUG:
+                print "Root: %s  %s    Dep: %s  %s" %(pkg,ver,package,version)
             #if version == None:
             #    continue
             if package not in self.externals:
@@ -28,21 +42,23 @@ class PackageDependency:
                         self.global_pkgs[package] = depth
                 else:
                     self.global_pkgs[package] = depth
-                self.gather(myeups,package,version,depth+1)
+                self.gather(myeups,package,version,depth+1,tags)
             else:
                 # package is external
+                if DEBUG:
+                    print "EXTERNAL PACKAGE: root: %s  %s   Dep: %s  %s" %(pkg,ver,package,version)
                 self.externals[package] = version
         return
 
     def getDependencyList(self, package, version, tags):
+
         self.global_pkgs = {}
 
         self.global_pkgs[package] = 1
         
         myeups = eups.Eups()
-        myeups.selectVRO(tags)
         
-        self.gather(myeups, package, version, 2)
+        self.gather(myeups, package, version, 2, tags)
         
         self.sorted_pkgs = sorted(self.global_pkgs.iteritems(), key=operator.itemgetter(1), reverse=True)
 
@@ -53,7 +69,7 @@ class PackageDependency:
         self.externals = {}
         self.global_pkgs = {}
 
-        eups_path=['/lsst/home/buildbot/RHEL6/buildslaves/lsst-build2/srpTvT/eups_userdata']
+        eups_path=['/lsst/home/buildbot/RHEL6/buildslaves/lsst9/TvT/eups_userdata']
         
         for name in os.listdir("/lsst/DC3/stacks/gcc445-RH6/28nov2011/Linux64/external"):
             self.externals[name] = "unknown"
@@ -147,6 +163,7 @@ class sp:
 
 
 p = sp()
+print "Command line: ",sys.argv
 if p.createDependencyLists(sys.argv[1:]) is False:
     print "error creating dependency lists"
 else:
@@ -154,6 +171,9 @@ else:
 
     print "these need to be built"
     print list
+    if not list:
+            print "Nothing needs to be built."
+            sys.exit(0)
     for name in list:
             print name+" "+list[name]
 

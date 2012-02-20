@@ -33,7 +33,7 @@ slavename = 'lsst-build2.ncsa.illinois.edu'
 passwd = 'CHANGE_TO_THE_PRODUCTION_PASS'
 keepalive = 600
 usepty = 0
-umask = None
+umask = 002
 maxdelay = 300
 
 s = BuildSlave(buildmaster_host, port, slavename, passwd, basedir,

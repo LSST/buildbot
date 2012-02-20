@@ -7,9 +7,10 @@
 #
 import os
 ##
-# exclude these packages
+# exclude these packages  - for packages which have been abandoned
+#                           or are just lsstpkg aliases
 #
-exclude_pkgs=set(["lsst","lssteups","sconsUtils","LSSTPipe", "lsstactive", "thirdparty_core"])
+exclude_pkgs=set(["lsst","lssteups","sconsUtils","LSSTPipe", "lsstactive", "thirdparty_core", "obs_cfht", "ip_pipeline", "meas_pipeline", "coadd_pipeline", "meas_multifit", "ip_diffim" ])
 
 ##
 # current_list is the URL of the distribution stack contents

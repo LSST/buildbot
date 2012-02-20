@@ -59,7 +59,6 @@ do
         --parallel) PARALLEL=$2; shift 2;;
         --package) PACKAGE=$2; shift 2;;
         --step_name) STEP_NAME=$2; shift 2;;
-        --step_name) STEP_NAME=$2; shift 2;;
         --on_demand) ON_DEMAND_BUILD=1; shift 1;;
         *) echo "parsed options; arguments left are: $*"
              break;;
@@ -187,9 +186,13 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
             if [ "$CUR_PACKAGE" == $STEP_NAME ]; then
                 echo "This is the target package for building.  Continuing."
             else
-                echo "This package is a dependent package that was not marked as a"
-                echo "successful build in its step.  Stopping build."
-                exit 2
+                FAIL_MSG="\n$CUR_PACKAGE is a dependent package of $STEP_NAME that was not marked as pre-built.\nPossibly 'pkgs/std/w12/manifests/lsstactive.#.manifest' is out of order;\n possibly $CUR_PACKAGE failed to build successfully earlier in the one-pass ordering.\n\nBetter check."
+                emailFailure "$STEP_NAME" "$BUCK_STOPS_HERE"
+                clear_blame_data
+                # RAA 15 Feb 2012: why not build a missing package? Likely bad
+                # ordering in http://dev.lsstcorp.org/pkgs/std/w12/manifests/lsstactive-#.manifest
+                #echo "Stopping build."
+                #exit 2
     
             fi
         fi
@@ -239,22 +242,34 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
             print_error $BUILD_ERROR
             BUILD_STATUS=4
         else   # Built libs OK, ran tests OK, now eups-install
-            pretty_execute "scons  version=$REVISION+$BUILD_NUMBER opt=3 install current declare python"
+            pretty_execute "scons  version=$CUR_VERSION+$BUILD_NUMBER opt=3 install current declare python"
             if [ $RETVAL != 0 ]; then
-                BUILD_ERROR="failure of install: 'scons  version=$REVISION+$BUILD_NUMBER opt=3 install current declare python' build."
+                BUILD_ERROR="failure of install: 'scons  version=$CUR_VERSION+$BUILD_NUMBER opt=3 install current declare python' build."
                 print_error $BUILD_ERROR
                 BUILD_STATUS=3
             fi
-            print "Success of Compile/Load/Test/Install: $CUR_PACKAGE $REVISION"
+            print "Success of Compile/Load/Test/Install: $CUR_PACKAGE $CUR_VERSION"
+            eups declare -t SCM $CUR_PACKAGE $CUR_VERSION+$BUILD_NUMBER
+            if [ $? != 0 ]; then
+                print_error "WARNING: failure setting SCM tag on build product."
+            else
+                print "Success of SCM tag on: $CUR_PACKAGE $CUR_VERSION"
+            fi
         fi
     else  # Built libs OK, no tests wanted|available, now eups-install
-            pretty_execute "scons version=$REVISION+$BUILD_NUMBER opt=3 install current declare python"
+            pretty_execute "scons version=$CUR_VERSION+$BUILD_NUMBER opt=3 install current declare python"
             if [ $RETVAL != 0 ]; then
-                BUILD_ERROR="failure of install: 'scons version=$REVISION+$BUILD_NUMBER opt=3 install current declare python' build."
+                BUILD_ERROR="failure of install: 'scons version=$CUR_VERSION+$BUILD_NUMBER opt=3 install current declare python' build."
                 print_error $BUILD_ERROR
                 BUILD_STATUS=1
             fi
-            print "Success during Compile/Load/Install with-tests: $CUR_PACKAGE $REVISION"
+            print "Success during Compile/Load/Install with-tests: $CUR_PACKAGE $CUR_VERSION"
+            eups declare -t SCM $CUR_PACKAGE $CUR_VERSION+$BUILD_NUMBER
+            if [ $? != 0 ]; then
+                print_error "WARNING: failure setting SCM tag on build product."
+            else
+                print "Success of SCM tag on: $CUR_PACKAGE $CUR_VERSION"
+            fi
     fi
 
     print "BUILD_STATUS status after test failure search: $BUILD_STATUS"
@@ -265,12 +280,12 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
         pretty_execute pwd
         if [ "$LOG_DEST" ]; then
             if [ -f "$LOG_FILE" ]; then
-                copy_log ${CUR_PACKAGE}_$REVISION/$LOG_FILE $LOG_FILE $LOG_DEST_HOST $LOG_DEST_DIR ${CUR_PACKAGE}/$REVISION $LOG_URL
+                copy_log ${CUR_PACKAGE}_$CUR_VERSION/$LOG_FILE $LOG_FILE $LOG_DEST_HOST $LOG_DEST_DIR ${CUR_PACKAGE}/$CUR_VERSION $LOG_URL
             else
-                print_error "Warning: No $LOG_FILE present."
+                print_error "WARNING: No $LOG_FILE present."
             fi
         else
-            print_error "Warning: No archive destination provided for log file."
+            print_error "WARNING: No archive destination provided for log file."
         fi
     fi
 
@@ -281,7 +296,7 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
 
     # Time to exit due to build failure of a dependency
     if [ "$BUILD_STATUS" -ne "0" ]; then
-        FAIL_MSG="\nBuildbot failed to build $PACKAGE Trunk-vs-Trunk due to an error building dependency: $CUR_PACKAGE.\n\nDependency: $CUR_PACKAGE (version: $CUR_REVISION) error:\n$BUILD_ERROR\n"
+        FAIL_MSG="\nBuildbot failed to build $PACKAGE Trunk-vs-Trunk due to an error building dependency: $CUR_PACKAGE.\n\nDependency: $CUR_PACKAGE (version: $CUR_VERSION) error:\n$BUILD_ERROR\n"
         # Get Email List for Package Owners & Blame list
         fetch_package_owners $CUR_PACKAGE
         fetch_blame_data $SCM_LOCAL_DIR $WORK_PWD 
@@ -295,11 +310,11 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
         clear_blame_data
 
         #   Following only necessary if failed during scons-install step
-        if [ "`eups list -s $CUR_PACKAGE $REVISION 2> /dev/null | grep $REVISION | wc -l`" != "0" ]; then
-            pretty_execute "setup -u -j $CUR_PACKAGE $REVISION"
+        if [ "`eups list -s $CUR_PACKAGE $CUR_VERSION 2> /dev/null | grep $CUR_VERSION | wc -l`" != "0" ]; then
+            pretty_execute "setup -u -j $CUR_PACKAGE $CUR_VERSION"
         fi
-        if [ "`eups list -c $CUR_PACKAGE $REVISION  &> /dev/null | grep $REVISION | wc -l`" != "0" ]; then
-            pretty_execute "eups undeclare -c $CUR_PACKAGE $REVISION"
+        if [ "`eups list -c $CUR_PACKAGE $CUR_VERSION  &> /dev/null | grep $CUR_VERSION | wc -l`" != "0" ]; then
+            pretty_execute "eups undeclare -c $CUR_PACKAGE $CUR_VERSION"
         fi
         print_error "Exiting since $CUR_PACKAGE failed to build/install successfully"
         
@@ -313,11 +328,11 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
     #setup -j $CUR_PACKAGE $CUR_VERSION
     setup -t current $CUR_PACKAGE
     if [ $? != 0 ]; then
-        print_error "Warning: unable to complete setup of installed $CUR_PACKAGE $CUR_VERSION. Continuing with package setup in local directory."
+        print_error "WARNING: unable to complete setup of installed $CUR_PACKAGE $CUR_VERSION. Continuing with package setup in local directory."
     fi
     # srp - jan 24 2012 - change next line to get current version which
     # is already installed.
-    #eups list -v $CUR_PACKAGE $REVISION
+    #eups list -v $CUR_PACKAGE $CUR_VERSION
     eups list -t current -v $CUR_PACKAGE
     print "-------------------------"
     #echo "touch $SCM_LOCAL_DIR/BUILD_OK"
@@ -328,7 +343,7 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
     if [ $retval == 0 ]; then
         rm -f $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/NEEDS_BUILD
     else
-        print_error "Warning: unable to set flag: $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_OK; this source directory will be rebuilt on next use." 
+        print_error "WARNING: unable to set flag: $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_OK; this source directory will be rebuilt on next use." 
     fi
     echo "EUPS_PATH is $EUPS_PATH"
     echo "Finished working with $CUR_PACKAGE $CUR_VERSION"

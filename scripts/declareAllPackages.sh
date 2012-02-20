@@ -9,7 +9,8 @@ cat manifest.list | while read LINE; do
     set $LINE
     #setup $1 $2
     echo "Declare $1 $2"
-    echo executing this: eups declare -vvvvvv -Z $LSST_DEVEL -t SCM --force -r $PWD/git/$1/$2 $1 $2
-    eups declare -Z $LSST_DEVEL --force -r $PWD/git/$1/$2 $1 $2
+    #echo executing this: eups declare -vvvvvv -Z $LSST_DEVEL  --force -r $PWD/git/$1/$2 $1 $2
+    echo eups declare -Z $LSST_DEVEL --force  -r $PWD/git/$1/$2 $1 $2
+    eups declare -Z $LSST_DEVEL --force  -r $PWD/git/$1/$2 $1 $2
     eups list -v $1
 done

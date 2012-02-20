@@ -40,7 +40,7 @@ queryPackageInfo() {
 
     arg=$1
 
-   while read LINE; do
+    while read LINE; do
         package=`echo $LINE | awk '{print $1}'`
         version=`echo $LINE | awk '{print $2}'`
         if [ $package == $arg ]; then
@@ -54,13 +54,9 @@ queryPackageInfo() {
         fi
     done < manifest.list
 
-    echo "RET_PACKAGE = $RET_PACKAGE"
-    # note: reached after the return above, or by finishing the loop
-    if [ $arg != $RET_PACKAGE ]; then
-        FAIL_MSG="$arg not found. See LSST buildbot developer."
-        emailFailure "Package Not Found" "$BUCK_STOPS_HERE"
-        exit 1
-    fi
+    FAIL_MSG="queryPackageInfo(): $arg not found. See LSST buildbot developer."
+    emailFailure "PackageNotFound" "$BUCK_STOPS_HERE"
+    exit 1
 }
 
 #--------------------------------------------------------------------------
@@ -108,7 +104,18 @@ package_is_special() {
     # 23 Nov 2011 installed toolchain since it's not in active.list, 
     #             required by tcltk but not an lsstpkg distrib package.
     # 3 Jan 2012 removed '    -o $SPCL_PACKAGE = "base"  ' to force rebuild.
+    # 27 Jan 2012 added obs_cfht (bit rot)
+    # 13 Feb 2012 added *_pipeline (old)
+    # 14 Feb 2010 added ip_diffim (too new)
+    # 16 Feb 2012 added meas_extentions_* (too new) and meas_multifit (old)
     if [ ${SPCL_PACKAGE:0:5} = "scons" \
+        -o ${SPCL_PACKAGE:0:16} = "meas_extensions_"  \
+        -o ${SPCL_PACKAGE} = "meas_multifit"  \
+        -o ${SPCL_PACKAGE} = "ip_diffim"  \
+        -o ${SPCL_PACKAGE} = "meas_pipeline"  \
+        -o ${SPCL_PACKAGE} = "ip_pipeline"  \
+        -o ${SPCL_PACKAGE} = "coadd_pipeline"  \
+        -o ${SPCL_PACKAGE} = "obs_cfht"  \
         -o ${SPCL_PACKAGE} = "thirdparty_core"  \
         -o ${SPCL_PACKAGE} = "toolchain"  \
         -o ${SPCL_PACKAGE:0:7} = "devenv_"  \
@@ -140,6 +147,8 @@ package_is_special() {
 #            URL_BUILDERS : web address to build log root directory
 #            BUILDER_NAME : process input param indicating build type
 #            BUCK_STOPS_HERE : email oddress of last resort
+#            RET_FAILED_PACKAGE_DIRECTORY: package directory which failed build
+#                                          if compile/build/test failure
 # return: 0  
 
 emailFailure() {
@@ -174,12 +183,12 @@ subject: $EMAIL_SUBJECT\n\
 to: \"Godzilla\" <robyn@noao.edu>\n\
 cc: \"Mothra\" <$BUCK_STOPS_HERE>\n" \
 >> email_body.txt
-#to: \"Godzilla\" <robyn@lsst.org>\n" \
 # REPLACE 'TO:' ABOVE " to: $MAIL_TO\n"               & add trailing slash
 # Also  add           " cc: $BUCK_STOPS_HERE\n\n "    & add trailing slash
 
     # Following is if error is failure in Compilation/Test/Build
     if  [ "$BLAME_EMAIL" != "" ] ; then
+        FAILED_PACKAGE_VERSION=`basename $RET_FAILED_PACKAGE_DIRECTORY`
         printf "\n\
 $FAIL_MSG\n\
 You were notified because you are either the package's owner or its last modifier.\n\n" \
@@ -197,23 +206,11 @@ http://dev.lsstcorp.org/trac/wiki/Buildbot
 Instructions
 ====
 
-bash:
+Go to your local copy of $emailPackage and run the commands:
 
-$ source $LSST_STACK/loadLSST.sh\n\
-$ EUPS_PATH=$LSST_DEVEL:$LSST_STACK\n\
-$ cd $RET_FAILED_PACKAGE_DIRECTORY\n\
-$ setup -t $RET_SETUP_SCRIPT_NAME -r .\n\
-
-[t]csh:
-
-%% source $LSST_STACK/loadLSST.csh\n\
-%% set EUPS_PATH $LSST_DEVEL:$LSST_STACK\n\
-%% cd $RET_FAILED_PACKAGE_DIRECTORY\n\
+%% EUPS_PATH=$LSST_DEVEL:$LSST_STACK\n\
+%% setenv EUPS_PATH $EUPS_PATH   # [t]csh users only! \n\
 %% setup -t $RET_SETUP_SCRIPT_NAME -r .\n\
-
-Go to your local copy of $emailPackage, run the command:
-
-setup -r . -k
 
 and debug there.
 \n"\
@@ -245,37 +242,6 @@ Questions?  Contact $BUCK_STOPS_HERE \n" \
 
     /usr/sbin/sendmail -t < email_body.txt
     rm email_body.txt
-###_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
-## Uncomment the next command  when ready to send to developers
-###_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
-#    #cat email_body.txt | mail -c "$BUCK_STOPS_HERE" -s "$EMAIL_SUBJECT" "$EMAIL_RECIPIENT"
 }
 
-###_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
-#                 Might want to reuse following to avoid duplicate emails
-###_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
-#emailFailure() {
-#    if [ "$3" = "FETCH_BLAME" ]; then
-#        # Determine last developer to modify the package
-#        local LAST_MODIFIER=`svn info $SCM_LOCAL_DIR | grep 'Last Changed Author: ' | sed -e "s/Last Changed Author: //"`
-#    
-#        # Is LAST_MODIFIER already in the list of PACKAGE_OWNERS ?
-#        local OVERLAP=`echo ${2}  | sed -e "s/.*${LAST_MODIFIER}.*/FOUND/"`
-#        unset DEVELOPER
-#        if [ "$OVERLAP" != "FOUND" ]; then
-#            local url="$PACKAGE_OWNERS_URL?format=txt"
-#            DEVELOPER=`curl -s $url | grep "sv ${LAST_MODIFIER}" | sed -e "s/sv ${LAST_MODIFIER}://" -e "s/ from /@/g"`
-#            if [ ! "$DEVELOPER" ]; then
-#                DEVELOPER=$BUCK_STOPS_HERE
-#                print "*** Error: did not find last modifying developer of ${LAST_MODIFIER} in $url"
-#                print "*** Expected \"sv <user>: <name> from <somewhere.dom>\""
-#            fi
-#    
-#            print "$BUCK_STOPS_HERE will send build failure notification to $2 and $DEVELOPER"
-#            MAIL_TO="$2, $DEVELOPER"
-#        else
-#            print "$BUCK_STOPS_HERE will send build failure notification to $2"
-#        fi
-#    fi
-###_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
 #--------------------------------------------------------------------------

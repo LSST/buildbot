@@ -1,11 +1,8 @@
-Last updated: 26 Jan 2012
+Last updated: 13 Jan 2012
 
 
 BuildBot Implementation Specifics
-* Determine if builders' *on-demand start* should be restricted from public 
-  * Should some builders be restricted from public start and not others
-  * Possibly, determine selection criteria for choosing authorized users of 
-    on-demand run-weekly builder.  
+* Select web-form use authentication scheme
     Two possibilities:
     1) use same list that's allowed write access to the svn/git repository; or
     2) on user request and run manager approval, add user id to a 
@@ -16,17 +13,14 @@ BuildBot Implementation Specifics
 * Determine what build products, logs, etc should be archived, then implement.
   (13 Jan 12: TBD)
 
-* gitRelease (update-Lsst-Stack master.cfg step) fails with known eups bug.
-  (13 Jan 12: TBD; Ticket issued)
-
 * A dependency which is not in the current.list (i.e. a brand new package 
-  which has not been released yet) should be detected in dependency list
-  generation and then processed with the rest of the dependencies. 
-  (13 Jan 12: IN PROGRESS, some of this is done.  need to convert to a CGI
-  script so buildmaster and buildslave(s) have access to the same list)
+  which has not been released yet) is detected in dependency list generation 
+  and then processed with the rest of the dependencies.  However a new primary
+  root, such as datarel, is still not processed.
+  (16 Feb 12: TBD)
 
 * Trigger Package Build on entry of package name should allow previously 
-  unknown git package name. 
+  unknown git package name to be built.  
   (13 Jan 12:  TBD)
 
 * non-position dependent command line argument code that Steve created for one of the scripts, and getting that ported over to the other scripts 
@@ -44,13 +38,6 @@ BuildBot Implementation Specifics
         $cat $EUPS_USERDATA/startup.py
           hooks.config.site.lockDirectoryBase = None
   (13 Jan 12: DONE; all new builders must invoke: 'update buildbot environment')
-
-* Getting the nightly release build working with the new distribution server  
-  (13 Jan 12: DONE)
-
-* Use of manifest list for gitId at start of build process versus using 
-  whatever is master at the moment of a build step.
-  (13 Jan 12: DONE)
 
 Buildbot Builders
  * Integration and Test of Individual Packages
@@ -74,12 +61,16 @@ Buildbot Builders
           * Note: success triggers build-verification ITag production run
    
     * Single Package Build&Test  (run On Demand, triggered on git change)
-        * of a Master package {VRO->Master,Beta, Stable}
-          * Name: "On Demand Trunk Vs Trunk"
+        * of a Master package {VRO->Master}
+          * Name: "On Demand Package Vs Trunk"
           * Status: master/slave DONE
+
+        * of a Master package {VRO->Master}
+          * Name: "Git Trigger Package Vs Trunk"
+          * Status: master/slave TBD
    
  * Integration and Test of Pipeline Processing
-    * Weekly Production Run testing DRP (run On Demand)
+    * Weekly Production Run testing DRP (run On-Demand)
         * of Master build-products
           * Name: "Master DRP Weekly"
           * Status: master trigger&On Demand TBD, slave IN PROGRESS
@@ -100,15 +91,11 @@ Buildbot Builders
  * Doxygen documentation build (triggered on I&T build success)
     * Master doxygen documentation build
       * Name: "Trunk Doxygen"
-      * Status: slave DONE, master trigger TBD
+      * Status: slave DONE, master trigger DONE
 
-    * Release doxygen documentation build
-      * Name: "Release Doxygen"
-      * Status: slave DONE, master trigger TBD
-
-    * Beta doxygen documentation build
-      * Name: "Beta Doxygen"
-      * Status: TBD
+    * Release and Beta doxygen documentation build
+      * Name: "Doxygen Build"
+      * Status:  DONE
 
     * Interesting Tag documentation build
       * Name: "One-off Tag Doxygen"
@@ -135,7 +122,7 @@ Winter 2012 Milestones for Buildbot Scripts
               it was a problem for the code it operates upon, though
 
 * Task: Build buildbot script that builds a just-tagged package against its declared dependencies.
-  * Status: DONE
+  * Status: TBD
 
 * Task: Extend above script to check package's ABI against its previous version
   * if no change, rebuild all packages depending on the just-tagged package.
@@ -175,7 +162,7 @@ Discusses additional builder configurations which may come of interest to LSST:
    This is our current 'Full' build scenario
  * define full rebuild builders which start from scratch and build in a 
    totally 'cleaned' environment.  This would just need to add an additional 
-   build step to sanitize the environment then could trigger the 
+   build step to sanitize the environment then then could trigger the 
    incremental builder mentioned above.
 
 

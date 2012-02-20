@@ -288,7 +288,7 @@ pretty_execute() {
 	cmd="$@ > $tmp_out 2> $tmp_err"
 	eval $cmd
 	RETVAL=$?
-	echo "DEBUG: PWD = $PWD ; cat $tmp_out | $awk_cmd_out;tmp_cmd = $tmp_cmd"
+	#echo "DEBUG: PWD = $PWD ; cat $tmp_out | $awk_cmd_out;tmp_cmd = $tmp_cmd"
 	echo "cat $tmp_out | $awk_cmd_out" > $tmp_cmd
 	source $tmp_cmd
 	echo "cat $tmp_err | $awk_cmd_err" > $tmp_cmd
@@ -330,7 +330,7 @@ set -x
     fi
     
 	RETVAL=$?
-	echo "DEBUG: PWD = $PWD ; cat $tmp_out | $awk_cmd_out;tmp_cmd = $tmp_cmd"
+	#echo "DEBUG: PWD = $PWD ; cat $tmp_out | $awk_cmd_out;tmp_cmd = $tmp_cmd"
 	echo "cat $tmp_out | $awk_cmd_out" > $tmp_cmd
     chmod +x $tmp_cmd
 	source $tmp_cmd
