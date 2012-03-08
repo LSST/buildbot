@@ -4,7 +4,7 @@
 usage() {
     echo "Usage: $0 type destination"
     echo "Build crosslinked doxygen documentation and install on LSST website."
-    echo "             type: either \"trunk\" \"stable\" \"beta\""
+    echo "             type: either \"master\" \"stable\" \"beta\""
     echo "   <host>:/<path>: an scp target for user 'buildbot' "
     echo "                   where host & fullpath directory specify where to receive scp files,"
     echo "                         the remote account is pre-defined to 'buildbot'."
@@ -26,6 +26,7 @@ check1() {
 
 source $LSST_HOME/loadLSST.sh
 
+source ${0%/*}/build_functions.sh
 source ${0%/*}/gitBuildFunctions.sh
 
 DEBUG=debug
@@ -39,8 +40,8 @@ WEB_ROOT="/lsst/home/buildbot/public_html/doxygen"
 # -------------------
 #*************************************************************************
 check1 $@
-DOXY_TYPE=$1           # 'trunk' or 'stable'
-if [ "$DOXY_TYPE" != "trunk"  -a "$DOXY_TYPE" != "stable" -a "$DOXY_TYPE" != "beta" ]; then
+DOXY_TYPE=$1           # 'master' or 'stable'
+if [ "$DOXY_TYPE" != "master"  -a "$DOXY_TYPE" != "stable" -a "$DOXY_TYPE" != "beta" ]; then
     usage
     exit 1
 fi
@@ -85,7 +86,7 @@ fi
 WORK_DIR=`pwd`
 echo "WORK_DIR: $WORK_DIR"
 
-# SCM checkout devenv/lsstDoxygen ** from trunk **
+# SCM checkout devenv/lsstDoxygen ** from master **
 prepareSCMDirectory devenv/lsstDoxygen BUILD
 if [ $RETVAL != 0 ]; then
     echo "Failed to extract $PACKAGE source directory during setup for BUILD."
@@ -112,10 +113,7 @@ echo ""
 eups list -v datarel
 echo ""
 
-#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
-#   F U T U R E  E R R O R :  trunk and release version should both be handled
-#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
-if [ "$DOXY_TYPE" = "trunk" ] ; then 
+if [ "$DOXY_TYPE" = "master" ] ; then 
     STACK_TYPE_SEARCH="buildslave"
 elif [ "$DOXY_TYPE" = "stable" ] ; then
     STACK_TYPE_SEARCH="stable"

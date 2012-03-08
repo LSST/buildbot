@@ -5,7 +5,7 @@
 # This is meant to be run from the builds/work directory.
 
 # arguments
-# --package : package we're looking at for to see if dependencies are built
+# --package : package we're looking at to see if dependencies are built
 # --script_dir : location of the buildbot scripts. used to invoke other scripts
 # --doxygen_dest : passed to the create_xlinkdocs.sh script
 # --doxygen_url : passed to the create_xlinkdocs.sh script
@@ -81,6 +81,6 @@ if [ "$DO_NOT_CONTINUE" != "0" ]; then
 fi
 
 # uncomment these when we're ready to run them.
-echo time $SCRIPT_DIR/create_xlinkdocs.sh trunk $DOXYGEN_DEST $DOXYGEN_URL
-time $SCRIPT_DIR/create_xlinkdocs.sh trunk $DOXYGEN_DEST $DOXYGEN_URL
+echo time $SCRIPT_DIR/create_xlinkdocs.sh master $DOXYGEN_DEST $DOXYGEN_URL
+time $SCRIPT_DIR/create_xlinkdocs.sh master $DOXYGEN_DEST $DOXYGEN_URL
 

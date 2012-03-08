@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 ###
-# bootstrap.py - output all the package names and current trunk git 
+# bootstrap.py - output all the package names and current master git 
 #                hash tags for packages
 #
 import os
@@ -10,11 +10,21 @@ class PackageList:
 
     def __init__(self,**kwargs):
         ##
-        # current_list is the URL of manifest for the lsstactive product, which
-        # includes all packages.
+        # current_list is the URL of the manifest for all git repositories.
         #
         current_list = "http://dev.lsstcorp.org/cgi-bin/build/repolist.cgi"
         
+        ##
+        # # F Y I:
+        # # Following is content of cgi script accessed in 'current_list':
+        # REPODIR=/lsst_ibrix/gitolite/repositories/LSST/DMS
+        # echo "Content-type: text/html"
+        # echo
+        # /bin/ls -d $REPODIR/*git | sed 's/\/lsst_ibrix\/gitolite\/repositories\/LSST\/DMS\///'
+        # # Problem is '$REPODIR/*git'  excludes all the git-packages 
+        # # which are more than one level from  LSST/DMS.
+
+
         
         #
         stream = os.popen("curl -s "+current_list)

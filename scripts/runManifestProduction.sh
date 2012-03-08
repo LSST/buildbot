@@ -56,6 +56,7 @@ check1() {
 
 
 # Setup LSST buildbot support fnunctions
+source ${0%/*}/build_functions.sh
 source ${0%/*}/gitBuildFunctions.sh
 
 DEBUG=debug
@@ -67,7 +68,7 @@ WEB_ROOT="/usr/local/home/buildbot/www/"
 # -- get arguments --
 # -------------------
 
-options=$(getopt -l verbose,debug,ccdCount:,runType:,tag:,beta,log_dest:,log_url:,builder_name:,build_number:,astro_data:,manifest: -- "$@")
+options=$(getopt -l verbose,debug,ccdCount:,runType:,tag:,beta,log_dest:,log_url:,builder_name:,build_number:,astro_net_data:,input_data:,manifest: -- "$@")
 
 BUILDER_NAME=""
 BUILD_NUMBER=0
@@ -86,7 +87,8 @@ do
         --tag)          TAG_LIST=$2; shift 2;;
         --builder_name) BUILDER_NAME=$2; shift 2;;
         --build_number) BUILD_NUMBER=$2; shift 2;;
-        --astro_data)   ASTRO_DATA_VERSION=$2; shift 2;;
+        --astro_net_data)   ASTRO_NET_DATA_VERSION=$2; shift 2;;
+        --input_data)   INPUT_DATA=$2; shift 2;;
         --manifest)     MANIFEST=$2; shift 2;;
         *) echo "parsed options; arguments left are:: $* ::"
              break;;
@@ -109,9 +111,11 @@ echo "CCD_COUNT: $CCD_COUNT"
 echo "RUN_TYPE: $RUN_TYPE"
 echo "BUILDER_NAME: $BUILDER_NAME"
 echo "BUILD_NUMBER: $BUILD_NUMBER"
-echo "ASTRO_DATA_VERSION: $ASTRO_DATA_VERSION"
+echo "ASTRO_NET_DATA_VERSION: $ASTRO_NET_DATA_VERSION"
+echo "INPUT_DATA: $INPUT_DATA"
 echo "USE_BETA: $USE_BETA"
 echo "MANIFEST: $MANIFEST"
+echo "Current `umask -p`"
 #*************************************************************************
 
 #/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
@@ -145,10 +149,10 @@ done
 #1 Feb 12# # setup the production run packages
 #1 Feb 12# if [ $USE_BETA ]; then
 #1 Feb 12#     setup --tag=beta --tag=current --tag=stable datarel
-#1 Feb 12#     setup -r $ASTROMETRY_NET_DATA_DIR/$ASTRO_DATA_VERSION astrometry_net_data 
+#1 Feb 12#     setup -r $ASTROMETRY_NET_DATA_DIR/$ASTRO_NET_DATA_VERSION astrometry_net_data 
 #1 Feb 12# else
 #1 Feb 12#     setup --tag=current --tag=stable datarel
-#1 Feb 12#     setup -r $ASTROMETRY_NET_DATA_DIR/$ASTRO_DATA_VERSION astrometry_net_data  
+#1 Feb 12#     setup -r $ASTROMETRY_NET_DATA_DIR/$ASTRO_NET_DATA_VERSION astrometry_net_data  
 #1 Feb 12# fi
 
 
@@ -173,23 +177,20 @@ echo "-----------------------------------------------------------------"
 
 
 # Explictily setup the astro data requested
-setup -j -r $ASTROMETRY_NET_DATA_DIR/$ASTRO_DATA_VERSION astrometry_net_data 
+setup -j -r $ASTROMETRY_NET_DATA_DIR/$ASTRO_NET_DATA_VERSION astrometry_net_data 
 
 echo ""
 echo "/\/\/\/\/\/\/\/\/\ After  datarel setup /\/\/\/\/\/\/\/\/"
 eups list  -s
 eups list astrometry_net_data
 echo ""
+echo "Current `umask -p`"
 
 cd $TESTING_ENDTOEND_DIR
-echo "Backgrounding drpRun in preparation for job process detachment"
-echo "($TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT --runType $RUN_TYPE -m robyn@lsst.org &)"
-$TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT --runType $RUN_TYPE -m robyn@lsst.org & 
+#echo "Backgrounding drpRun in preparation for job process detachment"
+#echo "(umask 002;$TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT --runType $RUN_TYPE --input $INPUT_DATA -m robyn@lsst.org &)&"
+echo "(umask 002;$TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT --runType $RUN_TYPE --input $INPUT_DATA  <&- > $WORK_DIR/setup/build$BUILD_NUMBER/drpRun.log 2>&1 &)&"
+(umask 002; $TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT --runType $RUN_TYPE --input $INPUT_DATA  <&- > $WORK_DIR/setup/build$BUILD_NUMBER/drpRun.log 2>&1 &)& 
 
-# Enable buildbot step to return to buildslave management by
-# detaching from last job
-echo "Detaching from drpRun"
-disown -h
-
-echo "Exiting $0 after having disowned the drpRun process."
+echo "Exiting $0 after detaching drpRun process and reassigning I/O streams to log: $WORK_DIR/setup/build$BUILD_NUMBER/drpRun.log ."
 exit 0

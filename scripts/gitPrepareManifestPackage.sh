@@ -2,12 +2,6 @@
 # install a requested package from version control, and recursively
 # ensure that its minimal dependencies are installed likewise
 
-LSST_STACK=$LSST_HOME
-
-# URL pointing to the log files; used in emailed report
-# URL_BUILDERS="http://dev.lsstcorp.org/build/builders"
-#URL_BUILDERS="http://lsst-build4.ncsa.illinois.edu:8020/builders"
-URL_BUILDERS="http://lsst-build.ncsa.illinois.edu:8010/builders"
 
 #--------------------------------------------------------------------------
 usage() {
@@ -35,10 +29,9 @@ usage() {
 #--------------------------------------------------------------------------
 
 DEBUG=debug
-DEV_SERVER="lsstdev.ncsa.uiuc.edu"
-SCM_SERVER="git.lsstcorp.org"
-WEB_ROOT="/var/www/html/doxygen"
 
+source ${0%/*}/gitConstants.sh
+source ${0%/*}/build_functions.sh
 source ${0%/*}/gitBuildFunctions.sh
 
 PROCESS=${0%/*}
@@ -69,8 +62,8 @@ package_is_special() {
     if [ ${SPCL_PACKAGE:0:5} = "scons" \
         -o ${SPCL_PACKAGE:0:16} = "meas_extensions_"  \
         -o ${SPCL_PACKAGE} = "meas_multifit"  \
-        -o ${SPCL_PACKAGE} = "ip_diffim"  \
         -o ${SPCL_PACKAGE} = "meas_pipeline"  \
+        -o ${SPCL_PACKAGE} = "ip_diffim"  \
         -o ${SPCL_PACKAGE} = "ip_pipeline"  \
         -o ${SPCL_PACKAGE} = "coadd_pipeline"  \
         -o ${SPCL_PACKAGE} = "thirdparty_core"  \
@@ -275,21 +268,16 @@ umask 002
 source $LSST_STACK"/loadLSST.sh"
 
 #*************************************************************************
-#First action...rebuild the $LSST_DEVEL cache
-pretty_execute "eups admin clearCache -Z $LSST_DEVEL"
-pretty_execute "eups admin buildCache -Z $LSST_DEVEL"
-
-#*************************************************************************
 step "Determine if $PACKAGE will be tested"
 
 package_is_special $PACKAGE
 if [ $? = 0 ]; then
-    print "Selected packages are not tested via trunk-vs-trunk, $PACKAGE is one of them"
+    print "Selected packages are not tested via master-vs-master, $PACKAGE is one of them"
     exit 0
 fi
 package_is_external $PACKAGE
 if [ $? = 0 ]; then 
-    print "External packages are not tested via trunk-vs-trunk"
+    print "External packages are not tested via master-vs-master"
     exit 0
 fi
 

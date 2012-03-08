@@ -1,9 +1,9 @@
 #!/usr/bin/python
 
 ###
-# bootstrap.py - output all the package names and current trunk git 
+# released.py - output all the package names and current master git 
 #                hash tags for packages listed in the distribution server's
-#                current.list URL
+#                current package list URL
 #
 import os
 ##
@@ -15,7 +15,7 @@ exclude_pkgs=set(["lsst","lssteups","sconsUtils","LSSTPipe", "lsstactive", "thir
 ##
 # current_list is the URL of the distribution stack contents
 #
-current_list = "http://dev.lsstcorp.org/pkgs/std/w12/current.list"
+current_list = "http://dev.lsstcorp.org/pkgs/std/w12/Winter2012.list"
 
 ##
 # createGitURL(package) - create the Git URL for a given package
@@ -38,7 +38,7 @@ pkg_list = set(pkgs.split())-exclude_pkgs
 
 ##
 # open each of the packages at the distribution stack URL, look up the hash
-# tag for the trunk, and output the package name and hash take to STDOUT
+# tag for the master, and output the package name and hash take to STDOUT
 #
 for pkg in pkg_list:
     gitURL = createGitURL(pkg)

@@ -1,5 +1,9 @@
-Last updated: 13 Jan 2012
+Last updated: 20 Feb 2012
 
+BugList
+* Extract buildmaster/slave passwords into python code segment for inline 
+  import. Then that new code segment is never installed into git.
+  Currently 20 Feb 2012, Passwords are masked when installed in git repository.
 
 BuildBot Implementation Specifics
 * Select web-form use authentication scheme

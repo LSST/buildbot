@@ -16,6 +16,7 @@ WEB_ROOT="/var/www/html/doxygen"
 SKIP_THESE_TESTS=""
 
 source ${0%/*}/gitConstants.sh
+source ${0%/*}/build_functions.sh
 source ${0%/*}/gitBuildFunctions.sh
 source ${0%/*}/gitBuildFunctions2.sh
 
@@ -23,7 +24,7 @@ source ${0%/*}/gitBuildFunctions2.sh
 # -- get arguments --
 # -------------------
 
-options=$(getopt -l verbose,boot,force,dont_log_success,log_dest:,log_url:,builder_name:,build_number:,slave_devel:,production,no_tests,parallel:,package:,step_name:,on_demand -- "$@")
+options=$(getopt -l verbose,boot,force,dont_log_success,log_dest:,log_url:,builder_name:,build_number:,slave_devel:,production,no_tests,parallel:,package:,step_name:,on_demand,on_change -- "$@")
 
 LOG_SUCCESS=0
 BUILDER_NAME=""
@@ -32,7 +33,9 @@ PRODUCTION_RUN=1
 DO_TESTS=0
 PARALLEL=2
 STEP_NAME="unknown"
-ON_DEMAND_BUILD=0
+ON_DEMAND_BUILD=1
+ON_CHANGE_BUILD=1
+ONE_PASS_BUILD=1
 while true
 do
     case $1 in
@@ -59,7 +62,8 @@ do
         --parallel) PARALLEL=$2; shift 2;;
         --package) PACKAGE=$2; shift 2;;
         --step_name) STEP_NAME=$2; shift 2;;
-        --on_demand) ON_DEMAND_BUILD=1; shift 1;;
+        --on_demand) ON_DEMAND_BUILD=0; ONE_PASS_BUILD=0; shift 1;;
+        --on_change) ON_CHANGE_BUILD=0; ONE_PASS_BUILD=0; shift 1;;
         *) echo "parsed options; arguments left are: $*"
              break;;
     esac
@@ -67,26 +71,37 @@ done
 
 echo "STEP_NAME = $STEP_NAME"
 if [ "$STEP_NAME" = "unknown" ]; then
-    FAIL_MSG="Missing argument --step_name must be specified"
+    FAIL_MSG="Missing input argument '--step_name',  build step name must be specified."
     emailFailure "Unknown"  "$BUCK_STOPS_HERE"
     exit 1
 fi
 
 
 if [ ! -d $LSST_DEVEL ] ; then
-    FAIL_MSG="LSST_DEVEL: $LSST_DEVEL does not exist."
+    FAIL_MSG="LSST_DEVEL: $LSST_DEVEL, was not passed as environment variable and thus does not exist."
     emailFailure "Unknown" "$BUCK_STOPS_HERE"
     exit 1
 fi
 
 PACKAGE=$1
 if [ "$PACKAGE" = "" ]; then
-    FAIL_MSG="No package name was provided as an input parameter."
+    FAIL_MSG="Missing input argument: '--package', package name must be supplied."
     emailFailure "Unknown" "$BUCK_STOPS_HERE"
     exit 1
+elif [ "$ON_CHANGE_BUILD" = "0" ]; then
+    # need to convert input param from repository name to package name
+    scm_url_to_package $PACKAGE
+    if [ "$SCM_PACKAGE" != "" ]; then
+        PACKAGE=$SCM_PACKAGE
+    else
+        FAIL_MSG="Change triggered builds require a valid url to the package repository as input.\n$PACKAGE is not formatted correctly."
+        emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
+        exit 1
+    fi
 fi
 
 print "PACKAGE: $PACKAGE"
+
 
 WORK_PWD=`pwd`
 
@@ -105,12 +120,12 @@ step "Determine if $PACKAGE will be tested"
 
 package_is_special $PACKAGE
 if [ $? = 0 ]; then
-    print "Selected packages are not tested via trunk-vs-trunk, $PACKAGE is one of them"
+    print "Selected packages are not tested, $PACKAGE is one of them"
     exit 0
 fi
 package_is_external $PACKAGE
 if [ $? = 0 ]; then 
-    print "External packages are not tested via trunk-vs-trunk"
+    print "External packages are not tested, $PACKAGE is one of them."
     exit 0
 fi
 
@@ -177,24 +192,21 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
         print "Local src directory is NOT marked BUILD_OK, so we need to check if this package can be built."
     fi
 
-    if [ "$ON_DEMAND_BUILD" == "0" ]; then
+    if [ "$ONE_PASS_BUILD" == "1" ]; then
         UNRELEASED_PACKAGE=`grep -w $CUR_PACKAGE $WORK_PWD/unreleased.txt`
 
         if [ "$UNRELEASED_PACKAGE" != "" ]; then
             echo "This is probably a new unreleased package, so we need to build it."
-        else
-            if [ "$CUR_PACKAGE" == $STEP_NAME ]; then
-                echo "This is the target package for building.  Continuing."
-            else
-                FAIL_MSG="\n$CUR_PACKAGE is a dependent package of $STEP_NAME that was not marked as pre-built.\nPossibly 'pkgs/std/w12/manifests/lsstactive.#.manifest' is out of order;\n possibly $CUR_PACKAGE failed to build successfully earlier in the one-pass ordering.\n\nBetter check."
-                emailFailure "$STEP_NAME" "$BUCK_STOPS_HERE"
-                clear_blame_data
-                # RAA 15 Feb 2012: why not build a missing package? Likely bad
-                # ordering in http://dev.lsstcorp.org/pkgs/std/w12/manifests/lsstactive-#.manifest
-                #echo "Stopping build."
-                #exit 2
-    
-            fi
+        elif [ "$CUR_PACKAGE" == $STEP_NAME ]; then
+            echo "This is the target package for building.  Continuing."
+        elif [ -e $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_FAIL ] ; then 
+            FAIL_MSG="$CUR_PACKAGE failed to successfully build earlier in the one-pass ordering.\n\n"
+            emailFailure "$STEP_NAME" "$BUCK_STOPS_HERE"
+            exit 2
+        else 
+            FAIL_MSG="$CUR_PACKAGE is a dependent package of $STEP_NAME that was not marked as pre-built.\nPossibly '~/RHEL6/etc/LsstStackManifest.txt' is out of order or missing a dependency declaration.\n\nBetter check which is the case."
+            emailFailure "$STEP_NAME" "$BUCK_STOPS_HERE"
+            clear_blame_data
         fi
     fi
 
@@ -214,19 +226,26 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
     BUILD_STATUS=0
     unset BUILD_ERROR
 
-    # build libs; then build tests; then install.
+    # compile lib and build docs; then test executables; then install.
     scons_tests $CUR_PACKAGE
-    pretty_execute "scons -j $PARALLEL opt=3 python"
+    pretty_execute "scons -j $PARALLEL opt=3 lib python doc"
     if [ $RETVAL != 0 ]; then
-        BUILD_ERROR="failure of initial 'scons -j $PARALLEL opt=3 python' build."
-        print_error $BUILD_ERROR
         BUILD_STATUS=2
+        BUILD_ERROR="failure of initial 'scons -j $PARALLEL opt=3 lib python' build ($BUILD_STATUS)."
+        print_error $BUILD_ERROR
     elif [ $DO_TESTS = 0 -a "$SCONS_TESTS" = "tests" -a -d tests ]; then 
-        # Built libs OK, want Tests built and run
+        # Built libs & doc OK, now test executables (examples and tests) 
+
 	# don't run these in parallel, because some tests depend on other
 	# binaries to be built, and there's a race condition that will cause
 	# the tests to fail if they're not built before the test is run.
-        pretty_execute "scons opt=3 tests"
+        # RAA 23 Feb 2012 -- ctrl_sched/tests has race condition using -j#  
+        if [ "$CUR_PACKAGE" = "ctrl_sched" ] ; then
+            pretty_execute "scons  opt=3 lib tests examples"
+        else
+            pretty_execute "scons -j $PARALLEL opt=3 lib tests examples"
+        fi
+        TESTING_RETVAL=$RETVAL
         FAILED_COUNT=`eval "find tests -name \"*.failed\" $SKIP_THESE_TESTS | wc -l"`
         if [ $FAILED_COUNT != 0 ]; then
             print_error "One or more required tests failed:"
@@ -238,30 +257,36 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
                 cat $FAILED_FILE
                 echo "================================================"
             done
-            BUILD_ERROR="failure of 'scons opt=3 tests' build."
-            print_error $BUILD_ERROR
             BUILD_STATUS=4
-        else   # Built libs OK, ran tests OK, now eups-install
-            pretty_execute "scons  version=$CUR_VERSION+$BUILD_NUMBER opt=3 install current declare python"
+            BUILD_ERROR="failure of 'scons -j $PARALLEL opt=3 lib tests examples' build ($BUILD_STATUS)."
+            print_error $BUILD_ERROR
+        elif [ $TESTING_RETVAL != 0 ]; then
+            # Probably failed in examples since the tests didn't report failure
+            BUILD_STATUS=5
+            BUILD_ERROR="failure of 'scons -j $PARALLEL opt=3 lib tests examples' build ($BUILD_STATUS)."
+            print_error $BUILD_ERROR
+        else   # Built libs & doc OK, ran executables OK, now eups-install
+            pretty_execute "scons  version=$CUR_VERSION+$BUILD_NUMBER opt=3 lib install current declare"
             if [ $RETVAL != 0 ]; then
-                BUILD_ERROR="failure of install: 'scons  version=$CUR_VERSION+$BUILD_NUMBER opt=3 install current declare python' build."
-                print_error $BUILD_ERROR
                 BUILD_STATUS=3
-            fi
-            print "Success of Compile/Load/Test/Install: $CUR_PACKAGE $CUR_VERSION"
-            eups declare -t SCM $CUR_PACKAGE $CUR_VERSION+$BUILD_NUMBER
-            if [ $? != 0 ]; then
-                print_error "WARNING: failure setting SCM tag on build product."
+                BUILD_ERROR="failure of install: 'scons  version=$CUR_VERSION+$BUILD_NUMBER opt=3 lib install current declare' build ($BUILD_STATUS)."
+                print_error $BUILD_ERROR
             else
-                print "Success of SCM tag on: $CUR_PACKAGE $CUR_VERSION"
+                print "Success of Compile/Load/Test/Install: $CUR_PACKAGE $CUR_VERSION"
+                eups declare -t SCM $CUR_PACKAGE $CUR_VERSION+$BUILD_NUMBER
+                if [ $? != 0 ]; then
+                    print_error "WARNING: failure setting SCM tag on build product."
+                else
+                    print "Success of SCM tag on: $CUR_PACKAGE $CUR_VERSION"
+                fi
             fi
         fi
-    else  # Built libs OK, no tests wanted|available, now eups-install
-            pretty_execute "scons version=$CUR_VERSION+$BUILD_NUMBER opt=3 install current declare python"
+    else  # Built libs & doc OK, no tests wanted|available, now eups-install
+            pretty_execute "scons version=$CUR_VERSION+$BUILD_NUMBER opt=3 lib install current declare python"
             if [ $RETVAL != 0 ]; then
-                BUILD_ERROR="failure of install: 'scons version=$CUR_VERSION+$BUILD_NUMBER opt=3 install current declare python' build."
-                print_error $BUILD_ERROR
                 BUILD_STATUS=1
+                BUILD_ERROR="failure of install: 'scons version=$CUR_VERSION+$BUILD_NUMBER opt=3 lib install current declare python' build ($BUILD_STATUS)."
+                print_error $BUILD_ERROR
             fi
             print "Success during Compile/Load/Install with-tests: $CUR_PACKAGE $CUR_VERSION"
             eups declare -t SCM $CUR_PACKAGE $CUR_VERSION+$BUILD_NUMBER
@@ -296,14 +321,14 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
 
     # Time to exit due to build failure of a dependency
     if [ "$BUILD_STATUS" -ne "0" ]; then
-        FAIL_MSG="\nBuildbot failed to build $PACKAGE Trunk-vs-Trunk due to an error building dependency: $CUR_PACKAGE.\n\nDependency: $CUR_PACKAGE (version: $CUR_VERSION) error:\n$BUILD_ERROR\n"
+        FAIL_MSG="\nBuildbot failed to build $PACKAGE due to an error building dependency: $CUR_PACKAGE.\n\nDependency: $CUR_PACKAGE (version: $CUR_VERSION) error:\n$BUILD_ERROR\n"
         # Get Email List for Package Owners & Blame list
         fetch_package_owners $CUR_PACKAGE
         fetch_blame_data $SCM_LOCAL_DIR $WORK_PWD 
         if [ "$CUR_PACKAGE" != "$PACKAGE" ]; then
            SEND_TO="$BUCK_STOPS_HERE"
         else
-           SEND_TO="$PACKAGE_OWNERS, $BLAME_EMAIL"
+           SEND_TO="$BLAME_EMAIL, $PACKAGE_OWNERS"
         fi
         #emailFailure "$STEP_NAME" "$SEND_TO" 
         emailFailure "$CUR_PACKAGE" "$SEND_TO" 
@@ -317,31 +342,32 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
             pretty_execute "eups undeclare -c $CUR_PACKAGE $CUR_VERSION"
         fi
         print_error "Exiting since $CUR_PACKAGE failed to build/install successfully"
-        
-        exit 1
+        echo touch $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_FAIL
+        touch $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_FAIL
+
+        if [ "$CUR_PACKAGE" != "$PACKAGE" ] ; then
+            exit 2
+        else
+            exit 1
+        fi
     fi
 
     # For production build, setup each successful install 
     print "-------------------------"
-    # srp - jan 24 2012 - change next line to get current version which
-    # is already installed.
-    #setup -j $CUR_PACKAGE $CUR_VERSION
+    # srp - jan 24 2012 -  use current version which is already installed.
     setup -t current $CUR_PACKAGE
     if [ $? != 0 ]; then
         print_error "WARNING: unable to complete setup of installed $CUR_PACKAGE $CUR_VERSION. Continuing with package setup in local directory."
     fi
-    # srp - jan 24 2012 - change next line to get current version which
-    # is already installed.
-    #eups list -v $CUR_PACKAGE $CUR_VERSION
+    # srp - jan 24 2012 - use current version which is already installed.
     eups list -t current -v $CUR_PACKAGE
     print "-------------------------"
-    #echo "touch $SCM_LOCAL_DIR/BUILD_OK"
-    #touch $SCM_LOCAL_DIR/BUILD_OK
     echo touch $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_OK
     touch $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_OK
     retval=$? 
     if [ $retval == 0 ]; then
         rm -f $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/NEEDS_BUILD
+        rm -f $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_FAIL
     else
         print_error "WARNING: unable to set flag: $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_OK; this source directory will be rebuilt on next use." 
     fi
@@ -354,8 +380,8 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
 done < "$INTERNAL_DEPS"
 
 if [ $DO_TESTS = 0 ]; then
-    print "Successfully built and tested trunk-vs-trunk version of $PACKAGE"
+    print "Successfully built and tested $PACKAGE"
 else
-    print "Successfully built, but not tested, trunk-vs-trunk version of $PACKAGE"
+    print "Successfully built, but not tested, $PACKAGE"
 fi
 exit 0

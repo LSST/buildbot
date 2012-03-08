@@ -10,6 +10,16 @@
 # 
 # TODO: Merge with gitBuildFunctions.sh 
 
+#--
+# Library Functions
+# -----------------
+# getPackageName()
+# queryPackageInfo()
+# usage()
+# package_is_special()
+# emailFailure()
+# -- 
+
 
 getPackageName() {
     if [ "$1" == "" ]; then
@@ -33,7 +43,7 @@ getPackageName() {
 
 queryPackageInfo() {
     if [ "$1" = "" ]; then
-        FAIL_MSG="No package name provided for queryPackageInfo() check. See LSST buildbot developer."
+        FAIL_MSG="Error in queryPackageInfo(): No package name provided. See LSST buildbot developer."
         emailFailure "NoPackageNamed" "$BUCK_STOPS_HERE"
         exit 1
     fi
@@ -54,8 +64,8 @@ queryPackageInfo() {
         fi
     done < manifest.list
 
-    FAIL_MSG="queryPackageInfo(): $arg not found. See LSST buildbot developer."
-    emailFailure "PackageNotFound" "$BUCK_STOPS_HERE"
+    FAIL_MSG="Error in queryPackageInfo(): named package: $arg, not found. See LSST buildbot developer."
+    emailFailure "$arg" "$BUCK_STOPS_HERE"
     exit 1
 }
 
@@ -63,7 +73,7 @@ queryPackageInfo() {
 usage() {
 #80 cols  ................................................................................
     echo "Usage: $0 [options] package"
-    echo "Install a requested package from version control (trunk), and recursively"
+    echo "Install a requested package from version control, and recursively"
     echo "ensure that its dependencies are also installed from version control."
     echo
     echo "Options (must be in this order):"
@@ -89,13 +99,13 @@ usage() {
 # -- Functions --
 # ---------------
 #--------------------------------------------------------------------------
-# -- Some LSST internal packages should never be built from trunk --
+# -- Some LSST internal packages should never be built --
 # $1 = eups package name
 # return 0 if a special LSST package which should be considered external
 # return 1 if package should be processed as usual
 package_is_special() {
     if [ "$1" = "" ]; then
-        FAIL_MSG="No package name provided for package_is_special check. See LSST buildbot developer."
+        FAIL_MSG="Error in package_is_special(): No package name provided. See LSST buildbot developer."
         emailFailure "NoPackageNamed" "$BUCK_STOPS_HERE"
         exit 1
     fi
@@ -111,8 +121,8 @@ package_is_special() {
     if [ ${SPCL_PACKAGE:0:5} = "scons" \
         -o ${SPCL_PACKAGE:0:16} = "meas_extensions_"  \
         -o ${SPCL_PACKAGE} = "meas_multifit"  \
-        -o ${SPCL_PACKAGE} = "ip_diffim"  \
         -o ${SPCL_PACKAGE} = "meas_pipeline"  \
+        -o ${SPCL_PACKAGE} = "ip_diffim"  \
         -o ${SPCL_PACKAGE} = "ip_pipeline"  \
         -o ${SPCL_PACKAGE} = "coadd_pipeline"  \
         -o ${SPCL_PACKAGE} = "obs_cfht"  \
@@ -143,6 +153,7 @@ package_is_special() {
 # Pre-Setup: BLAME_TMPFILE : file log of last commit on $1
 #            BLAME_EMAIL : email address of last developer to modify package
 #            FAIL_MSG : text tuned to point of error
+#            ONE_PASS_BUILD : indicates if doing on_change or on_demand builds
 #            STEP_NAME : name of package being processed in this run.
 #            URL_BUILDERS : web address to build log root directory
 #            BUILDER_NAME : process input param indicating build type
@@ -163,27 +174,28 @@ emailFailure() {
     # 1) the package we're building is the same as the one that reported
     #    the error
     # OR
-    # 2) we're doing an "on_demand_build"
+    # 2) we're doing a ONE_PASS_BUILD and not a full build
     if [ "$emailPackage" != "$STEP_NAME" ]; then
-        if [ "$STEP_NAME" != "on_demand_build" ]; then
+        if [ "$ONE_PASS_BUILD" = "1" ]  ; then
             print "Not sending e-mail;  waiting to report until actual package build";
             return 0
         fi
     fi
     MAIL_TO="$emailRecipients"
     URL_MASTER_BUILD="$URL_BUILDERS/$BUILDER_NAME/builds"
-    EMAIL_SUBJECT="LSST automated build failure: package $emailPackage in $BUILDER_NAME"
+    EMAIL_SUBJECT="LSST automated build failure: package: $emailPackage in $BUILDER_NAME"
 
-    [[ "$DEBUG" ]] && print "TO: $MAIL_TO; Subject: $EMAIL_SUBJECT; $BUILDER_NAME"
+    [[ "$DEBUG" ]] && print "TO: $MAIL_TO; Subject: $EMAIL_SUBJECT"
 
     rm -f email_body.txt
     printf "\
 from: \"Buildbot\" <$BUCK_STOPS_HERE>\n\
 subject: $EMAIL_SUBJECT\n\
-to: \"Godzilla\" <robyn@noao.edu>\n\
-cc: \"Mothra\" <$BUCK_STOPS_HERE>\n" \
+to: $MAIL_TO\n\
+cc: \"Buildbot\" <$BUCK_STOPS_HERE>\n\n" \
 >> email_body.txt
 # REPLACE 'TO:' ABOVE " to: $MAIL_TO\n"               & add trailing slash
+#to: \"Godzilla\" <robyn@noao.edu>\n"
 # Also  add           " cc: $BUCK_STOPS_HERE\n\n "    & add trailing slash
 
     # Following is if error is failure in Compilation/Test/Build
