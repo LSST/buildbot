@@ -1,4 +1,10 @@
 This directory contains file for version 0.8.5 of buildbot
 
 The passwords for the buildslaves need to be changed to the
-production versions, and shouldn't be checked into git.
+production versions, and shouldn't be checked into git.  
+
+Preparing to install from the git-source:
+------------------------------------ 
+Search for 'CHANGE_TO_THE_PRODUCTION_PASS' and convert to the correct password.
+
+
