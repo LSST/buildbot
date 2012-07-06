@@ -18,7 +18,6 @@
 #/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
 SCM_SERVER="git.lsstcorp.org"
 ASTROMETRY_NET_DATA_DIR=/lsst/DC3/data/astrometry_net_data/
-LAST_SUCCESSFUL_MANIFEST="lastSuccessfulBuildManifest.list"
 #/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
 
 DEBUG=debug
@@ -159,8 +158,8 @@ done
 ##
 # ensure full dependencies file is available
 ##
-if [ ! -f "$LAST_SUCCESSFUL_MANIFEST" ]; then
-    echo "error: Can't find $LAST_SUCCESSFUL_MANIFEST. Exiting."
+if [ ! -f "$MANIFEST" ]; then
+    echo "error: Can't find $MANIFEST. Exiting."
     exit 1
 fi
 
@@ -169,7 +168,7 @@ while read LINE; do
     set $LINE
     echo "Setting up: $1   $2"
     setup -j $1 $2
-done < $LAST_SUCCESSFUL_MANIFEST
+done < $MANIFEST
 
 echo " ----------------------------------------------------------------"
 eups list -s
@@ -187,10 +186,18 @@ echo ""
 echo "Current `umask -p`"
 
 cd $TESTING_ENDTOEND_DIR
-#echo "Backgrounding drpRun in preparation for job process detachment"
-#echo "(umask 002;$TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT --runType $RUN_TYPE --input $INPUT_DATA -m robyn@lsst.org &)&"
-echo "(umask 002;$TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT --runType $RUN_TYPE --input $INPUT_DATA  <&- > $WORK_DIR/setup/build$BUILD_NUMBER/drpRun.log 2>&1 &)&"
-(umask 002; $TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT --runType $RUN_TYPE --input $INPUT_DATA  <&- > $WORK_DIR/setup/build$BUILD_NUMBER/drpRun.log 2>&1 &)& 
+# raa 8Mar2012 - don't detach
+#echo "(umask 002;$TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT --runType $RUN_TYPE --input $INPUT_DATA  <&- > $WORK_DIR/setup/build$BUILD_NUMBER/drpRun.log 2>&1 &)&"
+#(umask 002; $TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT --runType $RUN_TYPE --input $INPUT_DATA  <&- > $WORK_DIR/setup/build$BUILD_NUMBER/drpRun.log 2>&1 &)& 
+#
+#echo "Exiting $0 after detaching drpRun process and reassigning I/O streams to log: $WORK_DIR/setup/build$BUILD_NUMBER/drpRun.log ."
 
-echo "Exiting $0 after detaching drpRun process and reassigning I/O streams to log: $WORK_DIR/setup/build$BUILD_NUMBER/drpRun.log ."
-exit 0
+
+#27May2012 Using defaults except for ccd count on drpRun.ps per K-T
+#$TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT --runType $RUN_TYPE --input $INPUT_DATA
+echo "$TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT -m $BUCK_STOPS_HERE --testOnly"
+$TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT -m $BUCK_STOPS_HERE --testOnly
+
+RUN_STATUS=$?
+echo "Exiting $0 after drpRun; run status: $RUN_STATUS ."
+exit  $RUN_STATUS

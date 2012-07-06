@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # this script checks to see all the dependencies for a given package are
-# marked with a BUILD_OK, and if they are, will create a manifest file for
-# the last successfully run build.
+# marked with a BUILD_OK, and if they are, will create a manifest file of
+# packages eups-tagged with "SCM" which flag a successful package build.
 # This is meant to be run from the builds/work directory.
 
 # arguments
 # --package : package we're looking at for to see if dependencies are built
 # --script_dir : location of the buildbot scripts. used to invoke other scripts
-# --builder_name : name of this buildbot build e.g. TvT
+# --builder_name : name of this buildbot build e.g. Trunk_vs_Trunk
 # --build_number : number assigned to this particular build
 #
 DEBUG=""
@@ -97,11 +97,11 @@ fi
 echo "PWD: `pwd`"
 eups list
 echo "/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/"
-eups list | grep TvT
+eups list -t SCM
 echo "/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/"
 
 rm -f tmp$LAST_SUCCESSFUL_MANIFEST
-eups list | grep TvT > tmp$LAST_SUCCESSFUL_MANIFEST
+eups list -t SCM > tmp$LAST_SUCCESSFUL_MANIFEST
 echo "/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/"
 echo "Contents of tmp$LAST_SUCCESSFUL_MANIFEST"
 cat tmp$LAST_SUCCESSFUL_MANIFEST
@@ -118,4 +118,4 @@ echo "$LAST_SUCCESSFUL_MANIFEST for package: $PACKAGE"
 cat $LAST_SUCCESSFUL_MANIFEST
 
 exit 0
-~      
+

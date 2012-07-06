@@ -121,7 +121,7 @@ package_is_external() {
 #  on failure: SCM_PACKAGE = ""
 #              status = 1
 scm_url_to_package() {
-local POSSIBLE=`echo $1 | sed -e "s/.*\/\(.*\).git$/\1/"`
+local POSSIBLE=`echo $1 | sed -e "s/^\(.*:\)\{0,1\}LSST\/DMS\/\(.*\).git$/\2/"`
 if [ "$POSSIBLE" = "$1" ]; then
     SCM_PACKAGE=""
 else

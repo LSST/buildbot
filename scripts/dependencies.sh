@@ -8,7 +8,7 @@ which python
 echo $PYTHON_PATH
 setup `grep datarel manifest.list`
 # setup all the packages in the manifest list so that the dependencies are
-# acquired from the brand-new source tables not past-due-date pacakges
+# acquired from the brand-new source tables not past-due-date packages
 while read LINE; do
     set $LINE
     echo "setup -j $1 $2"

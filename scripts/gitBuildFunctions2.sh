@@ -117,33 +117,36 @@ package_is_special() {
     # 27 Jan 2012 added obs_cfht (bit rot)
     # 13 Feb 2012 added *_pipeline (old)
     # 14 Feb 2010 added ip_diffim (too new)
+        #-o ${SPCL_PACKAGE} = "ip_diffim"  \
     # 16 Feb 2012 added meas_extentions_* (too new) and meas_multifit (old)
-    if [ ${SPCL_PACKAGE:0:5} = "scons" \
-        -o ${SPCL_PACKAGE:0:16} = "meas_extensions_"  \
-        -o ${SPCL_PACKAGE} = "meas_multifit"  \
-        -o ${SPCL_PACKAGE} = "meas_pipeline"  \
-        -o ${SPCL_PACKAGE} = "ip_diffim"  \
-        -o ${SPCL_PACKAGE} = "ip_pipeline"  \
-        -o ${SPCL_PACKAGE} = "coadd_pipeline"  \
-        -o ${SPCL_PACKAGE} = "obs_cfht"  \
-        -o ${SPCL_PACKAGE} = "thirdparty_core"  \
-        -o ${SPCL_PACKAGE} = "toolchain"  \
-        -o ${SPCL_PACKAGE:0:7} = "devenv_"  \
-        -o $SPCL_PACKAGE = "gcc"  \
-        -o $SPCL_PACKAGE = "afwdata" \
-        -o $SPCL_PACKAGE = "astrometry_net_data" \
-        -o $SPCL_PACKAGE = "isrdata"  \
-        -o $SPCL_PACKAGE = "meas_multifitData"  \
-        -o $SPCL_PACKAGE = "auton"  \
-        -o $SPCL_PACKAGE = "ssd"  \
-        -o $SPCL_PACKAGE = "mpfr"  \
-        -o ${SPCL_PACKAGE:0:6} = "condor"  \
-        -o ${SPCL_PACKAGE:0:5} = "mops_"  \
-        -o ${SPCL_PACKAGE:0:4} = "lsst" ]; then 
+    if [ ${SPCL_PACKAGE}         = "coadd_pipeline"  \
+        -o ${SPCL_PACKAGE}       = "ip_pipeline"  \
+        -o ${SPCL_PACKAGE}       = "meas_multifit"  \
+        -o ${SPCL_PACKAGE}       = "meas_pipeline"  \
+        -o ${SPCL_PACKAGE:0:5}   = "mops_"  \
+        -o ${SPCL_PACKAGE}       = "obs_cfht"  \
+        -o ${SPCL_PACKAGE}       = "obs_subaru"  \
+        -o ${SPCL_PACKAGE}       = "auton"  \
+        -o ${SPCL_PACKAGE:0:6}   = "condor"  \
+        -o ${SPCL_PACKAGE:0:7}   = "devenv_"  \
+        -o ${SPCL_PACKAGE}       = "gcc"  \
+        -o ${SPCL_PACKAGE}       = "mpfr"  \
+        -o ${SPCL_PACKAGE}       = "sconsUtils" \
+        -o ${SPCL_PACKAGE}       = "ssd"  \
+        -o ${SPCL_PACKAGE}       = "toolchain" \
+        -o ${SPCL_PACKAGE}       = "afwdata" \
+        -o ${SPCL_PACKAGE}       = "astrometry_net_data" \
+        -o ${SPCL_PACKAGE}       = "coadd_pipeline_data"  \
+        -o ${SPCL_PACKAGE}       = "isrdata"  \
+        -o ${SPCL_PACKAGE}       = "meas_algorithmdata"  \
+        -o ${SPCL_PACKAGE}       = "multifit"  \
+        -o ${SPCL_PACKAGE}       = "simdata"  \
+        -o ${SPCL_PACKAGE}       = "subaru"  \
+        -o ${SPCL_PACKAGE}       = "testdata_subaru"  \
+        ]; then
         return 0
-    else
-        return 1
     fi
+    return 1
 }
 
 #--------------------------------------------------------------------------
@@ -169,19 +172,32 @@ emailFailure() {
     # send failure message to stderr for display 
     print_error $FAIL_MSG
 
-    print "emailPackage = $emailPackage, STEP_NAME = $STEP_NAME"
+    print "emailPackage: $emailPackage, STEP_NAME: $STEP_NAME SCM_PACKAGE: $SCM_PACKAGE ON_CHANGE_BUILD: $ON_CHANGE_BUILD"
+    local localPackage="$PACKAGE"
+    if [ "$ON_CHANGE_BUILD" = "0" ] ; then
+        localPackage="$SCM_PACKAGE"
+    fi
     # only send email out if
-    # 1) the package we're building is the same as the one that reported
-    #    the error
-    # OR
-    # 2) we're doing a ONE_PASS_BUILD and not a full build
-    if [ "$emailPackage" != "$STEP_NAME" ]; then
+    # 1) package being built is same as one reporting error; OR
+    # 2) doing a ONE_PASS_BUILD and not a full build
+    if [ "$emailPackage" != "$localPackage" ]; then
         if [ "$ONE_PASS_BUILD" = "1" ]  ; then
-            print "Not sending e-mail;  waiting to report until actual package build";
+            print "Not ONE_PASS_BUILD: Not sending e-mail until $emailPackage build";
             return 0
         fi
     fi
-    MAIL_TO="$emailRecipients"
+    
+    #/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+    # raa 11 Mar 2012        F O R     D E B U G
+    if [ "$ON_CHANGE_BUILD" = "0" ]; then
+        MAIL_TO="$BUCK_STOPS_HERE"
+    else
+        MAIL_TO="$emailRecipients"
+    fi
+    # raa 11 Mar 2012        F O R     D E B U G
+    #/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+
+
     URL_MASTER_BUILD="$URL_BUILDERS/$BUILDER_NAME/builds"
     EMAIL_SUBJECT="LSST automated build failure: package: $emailPackage in $BUILDER_NAME"
 
@@ -222,7 +238,7 @@ Go to your local copy of $emailPackage and run the commands:
 
 %% EUPS_PATH=$LSST_DEVEL:$LSST_STACK\n\
 %% setenv EUPS_PATH $EUPS_PATH   # [t]csh users only! \n\
-%% setup -t $RET_SETUP_SCRIPT_NAME -r .\n\
+%% setup --nolocks -t $RET_SETUP_SCRIPT_NAME -r .\n\
 
 and debug there.
 \n"\

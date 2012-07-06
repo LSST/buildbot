@@ -1,27 +1,33 @@
 #!/usr/bin/python
 
 ###
-# released.py - output all the package names and current master git 
-#                hash tags for packages listed in the distribution server's
-#                current package list URL
+# released.py - output package name and branch's git hash tag for all packages 
+# listed in the distribution server's current package list URL
 #
-import os
+import os,sys
 ##
 # exclude these packages  - for packages which have been abandoned
 #                           or are just lsstpkg aliases
 #
-exclude_pkgs=set(["lsst","lssteups","sconsUtils","LSSTPipe", "lsstactive", "thirdparty_core", "obs_cfht", "ip_pipeline", "meas_pipeline", "coadd_pipeline", "meas_multifit", "ip_diffim" ])
+exclude_pkgs=set(["lsst","lssteups","sconsUtils","LSSTPipe", "lsstactive", "thirdparty_core", "obs_cfht", "ip_pipeline", "meas_pipeline", "coadd_pipeline", "meas_multifit" ])
 
 ##
 # current_list is the URL of the distribution stack contents
 #
-current_list = "http://dev.lsstcorp.org/pkgs/std/w12/Winter2012.list"
+current_list = "http://dev.lsstcorp.org/pkgs/std/w12/beta.list"
 
 ##
 # createGitURL(package) - create the Git URL for a given package
 #
 def createGitURL(package):
 	return "git@git.lsstcorp.org:LSST/DMS/"+package+".git"
+
+#=======================================================================
+if len(sys.argv) < 2:
+    sys.stderr.write("Usage: %s <git-branch>" % (sys.argv[0]))
+    sys.exit(1)
+
+gitBranch = sys.argv[1]
 
 ##
 # open a the current.list URL, and remove the first line, and any lines
@@ -38,12 +44,12 @@ pkg_list = set(pkgs.split())-exclude_pkgs
 
 ##
 # open each of the packages at the distribution stack URL, look up the hash
-# tag for the master, and output the package name and hash take to STDOUT
+# tag for <branch>, and output the package name and hash tag to STDOUT
 #
 for pkg in pkg_list:
     gitURL = createGitURL(pkg)
     try:
-        stream=os.popen("git ls-remote --refs -h "+ gitURL +" | grep refs/heads/master | awk '{print $1}'")
+        stream=os.popen("git ls-remote --refs -h "+ gitURL +" | grep refs/heads/"+ gitBranch +" | awk '{print $1}'")
         hashTag = stream.read()
         print pkg+" "+hashTag.strip()
     except IOError:

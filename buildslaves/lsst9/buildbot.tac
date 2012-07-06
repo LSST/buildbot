@@ -6,7 +6,7 @@ from buildslave.bot import BuildSlave
 
 basedir = r'/lsst/home/buildbot/RHEL6/buildslaves/lsst9'
 rotateLength = 10000000
-maxRotatedFiles = 10
+maxRotatedFiles = 5
 
 # if this is a relocatable tac file, get the directory containing the TAC
 if basedir == '.':

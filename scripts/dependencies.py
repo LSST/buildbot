@@ -6,8 +6,8 @@ import operator
 import os,string
 
 # Select the extent of the debug messages: 'True' provides more output.
-DEBUG = True
-#DEBUG = False
+#DEBUG = True
+DEBUG = False
 
 class PackageDependency:
 
@@ -69,8 +69,6 @@ class PackageDependency:
         self.externals = {}
         self.global_pkgs = {}
 
-        eups_path=['/lsst/home/buildbot/RHEL6/buildslaves/lsst9/TvT/eups_userdata']
-        
         for name in os.listdir("/lsst/DC3/stacks/gcc445-RH6/28nov2011/Linux64/external"):
             self.externals[name] = "unknown"
 

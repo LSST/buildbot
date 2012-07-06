@@ -36,6 +36,7 @@ STEP_NAME="unknown"
 ON_DEMAND_BUILD=1
 ON_CHANGE_BUILD=1
 ONE_PASS_BUILD=1
+SCM_PACKAGE=""
 while true
 do
     case $1 in
@@ -69,6 +70,7 @@ do
     esac
 done
 
+
 echo "STEP_NAME = $STEP_NAME"
 if [ "$STEP_NAME" = "unknown" ]; then
     FAIL_MSG="Missing input argument '--step_name',  build step name must be specified."
@@ -76,31 +78,33 @@ if [ "$STEP_NAME" = "unknown" ]; then
     exit 1
 fi
 
-
 if [ ! -d $LSST_DEVEL ] ; then
     FAIL_MSG="LSST_DEVEL: $LSST_DEVEL, was not passed as environment variable and thus does not exist."
     emailFailure "Unknown" "$BUCK_STOPS_HERE"
     exit 1
 fi
 
-PACKAGE=$1
-if [ "$PACKAGE" = "" ]; then
+# Acquire Root PACKAGE Name; OnChange's version extracted from gitrepos addr
+if [ "$1" = "" ]; then
     FAIL_MSG="Missing input argument: '--package', package name must be supplied."
     emailFailure "Unknown" "$BUCK_STOPS_HERE"
     exit 1
-elif [ "$ON_CHANGE_BUILD" = "0" ]; then
+elif [ "$ON_CHANGE_BUILD" = "1" ]; then
+    PACKAGE="$1"
+else
     # need to convert input param from repository name to package name
-    scm_url_to_package $PACKAGE
+    scm_url_to_package "$1"
     if [ "$SCM_PACKAGE" != "" ]; then
-        PACKAGE=$SCM_PACKAGE
+        PACKAGE="$SCM_PACKAGE"
+        print "OnChange sets: PACKAGE:$PACKAGE:    STEP_NAME:  $STEP_NAME"
     else
-        FAIL_MSG="Change triggered builds require a valid url to the package repository as input.\n$PACKAGE is not formatted correctly."
-        emailFailure "$PACKAGE" "$BUCK_STOPS_HERE"
+        FAIL_MSG="Change triggered builds require a valid url to the package repository as input.\n$1 is not formatted correctly."
+        emailFailure "$1" "$BUCK_STOPS_HERE"
         exit 1
     fi
 fi
 
-print "PACKAGE: $PACKAGE"
+print "PACKAGE: $PACKAGE    STEP_NAME:  $STEP_NAME  SCM_PACKAGE: $SCM_PACKAGE"
 
 
 WORK_PWD=`pwd`
@@ -240,7 +244,7 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
 	# binaries to be built, and there's a race condition that will cause
 	# the tests to fail if they're not built before the test is run.
         # RAA 23 Feb 2012 -- ctrl_sched/tests has race condition using -j#  
-        if [ "$CUR_PACKAGE" = "ctrl_sched" ] ; then
+        if [ "$CUR_PACKAGE" = "ctrl_sched"  -o "$CUR_PACKAGE" = "ctrl_events" ] ; then
             pretty_execute "scons  opt=3 lib tests examples"
         else
             pretty_execute "scons -j $PARALLEL opt=3 lib tests examples"

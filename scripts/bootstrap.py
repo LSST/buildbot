@@ -4,7 +4,7 @@
 # bootstrap.py - output all the package names and current master git 
 #                hash tags for packages
 #
-import os
+import os, sys
 
 class PackageList:
 
@@ -54,13 +54,25 @@ class PackageList:
     def getPackageList(self):
         return self.pkg_list
 
+#========================================================================
+if len(sys.argv) < 2:
+    sys.stderr.write("Usage: %s <git-branch>" % (sys.argv[0]))
+    sys.exit(1)
+
+gitBranch = sys.argv[1]    
+
+##
+# open each of the packages at the distribution stack URL, look up the hash
+# tag for <branch>, and output the package name and hash tag to STDOUT
+#
 p = PackageList()
 ps = p.getPackageList()
 for pkg in ps:
     gitURL = "git@git.lsstcorp.org:LSST/DMS/"+pkg+".git"
     try:
-        stream=os.popen("git ls-remote --refs -h "+ gitURL +" | grep refs/heads/master | awk '{print $1}'")
+        stream=os.popen("git ls-remote --refs -h "+ gitURL +" | grep refs/heads/"+ gitBranch +" | awk '{print $1}'")
         hashTag = stream.read()
         print pkg+" "+hashTag.strip()
     except IOError:
         pass
+
