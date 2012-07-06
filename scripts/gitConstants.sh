@@ -7,4 +7,4 @@ DEV_SERVER="lsstdev.ncsa.uiuc.edu"
 SCM_SERVER="git.lsstcorp.org"
 WEB_ROOT="/var/www/html/doxygen"
 
-CURRENT_PACKAGE_LIST_URL="http://$DEV_SERVER/pkgs/std/w12/Winter2012.list"
+CURRENT_PACKAGE_LIST_URL="http://$DEV_SERVER/pkgs/std/w12/beta.list"
