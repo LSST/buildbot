@@ -137,7 +137,7 @@ echo ""
 
 
 $WORK_DIR/$SCM_LOCAL_DIR/bin/makeDocs datarel $DATAREL_VERSION | doxygen -
-if [ ! $? ] ; then
+if [ $? != 0 ] ; then
     echo "Failed to generate DATAREL documentation for $DOXY_TYPE source."
     exit 1
 fi
