@@ -1,13 +1,21 @@
 #!/bin/sh
+source ${0%/*}/gitConstants.sh
+
+if [ "x$1" = "x" ]; then
+    echo "FATAL: Usage: $0  <local eups directory - new or existing>"
+fi
 umask 002
+unset LSST_DEVEL
 source $LSST_HOME/loadLSST.sh
-echo "sandbox should be at "$1
 if [ -d "$1" ]; then
-    echo "sandbox directory $1 already exists"
+    echo "INFO: buildbot eups stack: \"$1\" already exists"
 else
     mkdir -p $1
     mksandbox $1
+    echo "INFO: buildbot eups stack created at \"$1\""
 fi
+export LSST_DEVEL=$1
+
 # make sure the parent directory of the sandbox is accessible.  Buildbot
 # ignores the umask settings when it is created.
 chmod og+rx $1/..
@@ -24,3 +32,8 @@ if [ -n "$EUPS_USERDATA" ]; then # if the EUPS_USERDATA var is set
         echo "$EUPS_USERDATA/startup.py exists, not overwriting"
     fi
 fi
+
+# Finally, clear the Blame list which will be used by all other packages to 
+# append a blamed developer's email address for later failure notification.
+cp /dev/null BlameNotification.list
+

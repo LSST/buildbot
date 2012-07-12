@@ -1,20 +1,20 @@
 #==============================================================
 # Set a global used for error messages to the buildbot guru
 #==============================================================
-#BUCK_STOPS_HERE="srp@ncsa.uiuc.edu"
-BUCK_STOPS_HERE="robyn@lsst.org"
+BUCK_STOPS_HERE="robyn@LSST.org"
 
 # See fetch_blame_data
-BUILDBOT_BLAMEFILE="buildbot_tVt_blame"    # see fetch_blame_data
+STEP_BLAMEFILE="buildbot_tVt_blame"    # see fetch_blame_data
 
 # --
-# Library Functions
+# Library Functions which relate to the Source Configuration Manager (SCM)
 # -----------------
 # scons_tests() 
 # fetch_package_owners() 
 # clear_blame_data() 
 # fetch_blame_data() 
 # package_is_external()
+# package_is_special()
 # scm_url_to_package() 
 # scm_url() 
 # scm_server_dir() 
@@ -22,7 +22,8 @@ BUILDBOT_BLAMEFILE="buildbot_tVt_blame"    # see fetch_blame_data
 # pretty_execute2() 
 # scm_info() 
 # saveSetupScript()
-# prepareSCMDirectory() 
+# prepareSCMDirectory()  - this is only used by stack build slaves
+# clonePackageMasterRepository()  - this is only used for 'master' repo fetch
 # --
 
 #---------------------------------------------------------------------------
@@ -59,7 +60,7 @@ fetch_package_owners() {
 clear_blame_data() {
     unset BLAME_INFO
     unset BLAME_EMAIL
-    unset BLAME_TMPFILE
+    unset STEP_FAILURE_BLAME
 }
 
 #---------------------------------------------------------------------------
@@ -68,7 +69,7 @@ clear_blame_data() {
 # return result as RET_BLAME_EMAIL
 fetch_blame_data() {
     local BLAME_PWD=`pwd`
-    BLAME_TMPFILE="$2/$BUILDBOT_BLAMEFILE"
+    STEP_FAILURE_BLAME="$2/$STEP_BLAMEFILE"
     BLAME_INFO=""
     if [ ! -d "$1" ] ; then 
          BLAME_EMAIL=""
@@ -83,12 +84,13 @@ fetch_blame_data() {
          cd $BLAME_PWD
          return 0
     fi
-    touch  $BLAME_TMPFILE
+    touch  $STEP_FAILURE_BLAME
     if [ $? != 0 ]; then
-        print "Unable to create temp file: $BLAME_TMPFILE for blame details."
-        BLAME_TMPFILE="/dev/null"
+        print "Unable to create temp file: $STEP_FAILURE_BLAME for blame details."
+        STEP_FAILURE_BLAME="/dev/null"
     fi
-    git log --name-status --source -1 > $BLAME_TMPFILE
+    git log --name-status --source -1 > $STEP_FAILURE_BLAME
+    cat $STEP_FAILURE_BLAME >> $WORK_PWD/$BUILD_FAILURE_BLAME
     cd $BLAME_PWD
     return 0
 }
@@ -105,10 +107,75 @@ package_is_external() {
     if [ "${extra_dir:0:8}" = "external" ]; then
         debug "$1 is an external package"
         return 0
-    else
-        debug "$1 is probably an internal LSST package"
-        return 1
+    elif [ "${extra_dir:0:8}" = "pseudo" ]; then
+        debug "$1 is an pseudo package"
+        return 0
     fi
+return 1
+}
+
+#--------------------------------------------------------------------------
+# -- Some LSST internal packages should never be built from master --
+# $1 = eups package name
+# return 0 if a special LSST package which should be considered external
+# return 1 if package should be processed as usual
+package_is_special() {
+    if [ "$1" = "" ]; then
+        print_error "============================================================="
+        print_error "No package name provided for package_is_special check. See LSST buildbot developer."
+        print_error "============================================================="
+        exit $BUILDBOT_FAILURE
+    fi
+    local SPCL_PACKAGE="$1"
+
+    # 23 Nov 2011 installed toolchain since it's not in active.list, 
+    #             required by tcltk but not an lsstpkg distrib package.
+    # 27 Jan 2012 added obs_cfht (bit rot)
+    # 13 Feb 2012 added *_pipeline (old)
+    # 16 Feb 2012 added meas_multifit (old)
+    # 24 May 2012 added obs_subaru bypass
+    # 4 June 2012 added sdqa (old)
+    # 4 June 2012 added afw_extensions_rgb analysis meas_deblender (too new)
+
+#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
+# N O T E: 
+# If you change this, remember to change: buildmaster/templates/layout.html
+#                                and possibly, RHEL6/etc/excluded.txt
+#\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+##        -o ${SPCL_PACKAGE:0:16}  = "meas_extensions_"  
+# Not all are git $LSST_DMS/<package>.git
+    if [ ${SPCL_PACKAGE}         = "coadd_pipeline"  \
+        -o ${SPCL_PACKAGE}       = "afw_extensions_rgb"  \
+        -o ${SPCL_PACKAGE}       = "analysis"  \
+        -o ${SPCL_PACKAGE}       = "meas_deblender"  \
+        -o ${SPCL_PACKAGE}       = "ip_pipeline"  \
+        -o ${SPCL_PACKAGE}       = "meas_multifit"  \
+        -o ${SPCL_PACKAGE}       = "meas_pipeline"  \
+        -o ${SPCL_PACKAGE:0:5}   = "mops_"  \
+        -o ${SPCL_PACKAGE}       = "obs_cfht"  \
+        -o ${SPCL_PACKAGE}       = "obs_subaru"  \
+        -o ${SPCL_PACKAGE}       = "sdqa"  \
+        -o ${SPCL_PACKAGE}       = "auton"  \
+        -o ${SPCL_PACKAGE:0:6}   = "condor"  \
+        -o ${SPCL_PACKAGE:0:7}   = "devenv_"  \
+        -o ${SPCL_PACKAGE}       = "gcc"  \
+        -o ${SPCL_PACKAGE}       = "mpfr"  \
+        -o ${SPCL_PACKAGE}       = "sconsUtils" \
+        -o ${SPCL_PACKAGE}       = "ssd"  \
+        -o ${SPCL_PACKAGE}       = "toolchain" \
+        -o ${SPCL_PACKAGE}       = "afwdata" \
+        -o ${SPCL_PACKAGE}       = "astrometry_net_data" \
+        -o ${SPCL_PACKAGE}       = "coadd_pipeline_data"  \
+        -o ${SPCL_PACKAGE}       = "isrdata"  \
+        -o ${SPCL_PACKAGE}       = "meas_algorithmdata"  \
+        -o ${SPCL_PACKAGE}       = "multifit"  \
+        -o ${SPCL_PACKAGE}       = "simdata"  \
+        -o ${SPCL_PACKAGE}       = "subaru"  \
+        -o ${SPCL_PACKAGE}       = "testdata_subaru"  \
+        ]; then
+        return 0
+    fi
+    return 1
 }
 
 #---------------------------------------------------------------------------
@@ -135,8 +202,10 @@ print_error "scm_url_to_package: $SCM_PACKAGE"
 # this is the GIT implemention of the scm_url routine.
 #---------------------------------------------------------------------------
 # $1 = raw package name (include devenv_ if present)
-# $2 = version (3.1.2, svn3438) (optional)
-# requires that SCM_SERVER be set already
+# $2 = git-branch if package does NOT have specified git-branch, 
+#                 then master branch is used.
+# requires SCM_SERVER be set already
+#          <work>/manifest.list  exist
 # returns RET_SCM_URL, RET_REVISION
 scm_url() {
     if [ ! "$SCM_SERVER" ]; then
@@ -145,38 +214,44 @@ scm_url() {
     elif [ ! "$1" ]; then
 	    print_error "ERROR: no package specified"
         return 1
+    elif [ ! "$2" ]; then
+	    print_error "ERROR: no git-branch specified"
+        return 1
     fi
+
     # removed in the great git repository rename of 2011
     #scm_server_dir $1
+
     RET_SCM_URL=git@$SCM_SERVER:LSST/DMS/$1.git
-    # First verify URL addresses a real git repo.
+    # Verify URL addresses a real git repo.
     git ls-remote $RET_SCM_URL > /dev/null
     if [ $? != 0 ]; then
         print_error "Failed to find a git repository matching URL: $RET_SCM_URL"
         return 1
     fi
-    # Note:  git ls-remote  has no option to ask about a specific commit-id.
-    if [ "$2" ] ; then
-        RET_REVISION = $2
-        return 0
-    fi
 
-    # Since version not supplied, will acquire git-master version's commit id
-    RET_REVISION=`git ls-remote --refs -h $RET_SCM_URL | grep refs/heads/master | awk '{print $1}'`
-    if [ $? != 0 ]; then  
-        print_error "Failed getting git master commit id for package $1." 
-        return 1 
+    # Will now acquire the gitId picked up from the manifest.list
+    if [ ! -e manifest.list ]; then
+        print_error "Required file: <work>/manifest.list does not exist.\nIs current buildslave step occurring before 'getVersions' step?"
+        return 1
     fi
-    return 0
+    RET_REVISION=`grep -w $1 manifest.list | awk '{print $2}'`
+    if [ "RET_REVISION" = "" ]; then
+        print_error "Failed getting either git refs/heads/{$2 or master} commit id for package $1." 
+        return 1 
+fi
+
 }
 
 #---------------------------------------------------------------------------
+#    O B S O L E T E - why is it still here?  because we may need to use it
+#                      on the devenv/* packages with non-standard git names
 # $1 = package name
 # sets RET_SCM_SERVER_DIR
 scm_server_dir() {
     RET_SCM_SERVER_DIR=${1//_//} # replace all _ with / to derive directory from package name
     if [ $1 = "scons" ]; then # special case
-	SCM_SERVER_DIR="devenv/sconsUtils"
+	RET_SCM_SERVER_DIR="devenv/sconsUtils"
     fi
     return 0
 }
@@ -301,18 +376,22 @@ saveSetupScript()
 }
 
 #---------------------------------------------------------------------------
+#
+#    NOTE:        this is only used by stack build slaves
+#
 # -- setup package's **git-master** scm directory in preparation for 
 #        either extracting initial source tree to bootstrap dependency tree 
 #        or the build  and install the accurate deduced dependency tree
 # $1 = adjusted eups package name
-# $2 = purpose of directory; one of: 
+# $2 = git-branch from which to extract package
+# $3 = purpose of directory; one of: 
 #         "BOOTSTRAP" :extracted directory only to be used for dependency tree
 #         "BUILD" : extracted directory to be used for build
 # return:  0, if svn checkout/update occured withuot error; 1, otherwise.
 #       :  RET_REVISION
 #       :  SCM_URL
 #       :  REVISION 
-#       :  SCM_LOCAL_DIR
+#       :  SCM_PKG_VER_DIR
 
 prepareSCMDirectory() {
 
@@ -326,23 +405,31 @@ prepareSCMDirectory() {
         return 1
     fi
 
-    if [[ "$2" != "BUILD" && "$2" != "BOOTSTRAP" ]]; then
-        print_error "Failed to include legitimate purpose of directory extraction: $2. See LSST buildbot developer."
+    if [ "$2" = "" ]; then
+        print_error "No git-branch name for git extraction. See LSST buildbot developer."
+        RETVAL=1
+        return 1
+    fi
+
+    if [[ "$3" != "BUILD" && "$3" != "BOOTSTRAP" ]]; then
+        print_error "Failed to include legitimate purpose of directory extraction: $3. See LSST buildbot developer."
         RETVAL=1
         return 1
     fi
 
     local SCM_PACKAGE=$1 
-    local PASS=$2
+    local GIT_BRANCH=$2
+    local PASS=$3
+    print "SCM_PACKAGE: $SCM_PACKAGE  GIT_BRANCH: $GIT_BRANCH  PASS: $PASS"
 
-    # package is internal and should be built from git-master
-    scm_url $SCM_PACKAGE
+    # package is internal and should be built from git-source
+    scm_url $SCM_PACKAGE  $GIT_BRANCH
     if [[ $? != 0 ]]; then
-       print_error "Failed acquiring git repository for: $SCM_PACKAGE"
+       print_error "Failed finding git repository for package: $SCM_PACKAGE"
        RET_REVISION=""
        REVISION=""
        SCM_URL=""
-       SCM_LOCAL_DIR=""
+       SCM_PKG_VER_DIR=""
        RETVAL=1
        return 1
     fi
@@ -350,31 +437,61 @@ prepareSCMDirectory() {
     RET_REVISION="$RET_REVISION"
     SCM_URL=$RET_SCM_URL
     REVISION=$RET_REVISION
+    local WORK_DIR=$PWD
+    print "Internal package: $SCM_PACKAGE will be built from git-id: $PLAIN_VERSION"
+    print "Working directory is $WORK_DIR" 
 
-    print "Internal package: $SCM_PACKAGE will be built from git-master version: $PLAIN_VERSION"
-   
-    echo "working directory is $PWD" 
     mkdir -p git
-    SCM_LOCAL_DIR="git/${SCM_PACKAGE}/${PLAIN_VERSION}"
+    SCM_PKG_DIR="git/${SCM_PACKAGE}"
+    SCM_PKG_VER_DIR="$SCM_PKG_DIR/${PLAIN_VERSION}"
     
-    if [ -e $SCM_LOCAL_DIR ] ; then
-        print "Local directory: $SCM_LOCAL_DIR exists, checking PASS: $PASS"
+    if [ -e $SCM_PKG_VER_DIR ] ; then
+        cd $SCM_PKG_VER_DIR
+        # To guard against:  existing branch != requested branch -> NEEDS_Build
+        print "Local directory: $SCM_PKG_VER_DIR exists, ensure correct branch: $BRANCH"
+        git checkout $GIT_BRANCH 1> clone.stdout 2> clone.stderr
+        if [ $? != 0 ] ; then
+            print_error "WARNING: $SCM_PACKAGE does not have branch: $GIT_BRANCH, trying 'master'"
+            git checkout master 1> clone.stdout 2> clone.stderr
+            if [ $? != 0 ] ; then
+                print_error "FAILURE: ==============================="
+                print_error "FAILURE: Failed to change existing git directory branch to either $GIT_BRANCH or 'master'"
+                print_error "FAILURE: stderr:"
+                cat clone.stderr
+                print_error "FAILURE: ==============================="
+                rm -f clone.stdout clone.stderr
+                cd $WORK_DIR
+                RETVAL=1
+                return $RETVAL
+            else
+                print_error "WARNING: $SCM_PACKAGE does not have branch: $GIT_BRANCH, using branch: master, instead."
+            fi
+        # git checkout of branch ok, now check if new use of that branch,
+        #     if so, then -> set needs_build and remove build_ok
+        #     if existing use of directory, no change in flag status
+        elif [ "`cat clone.stderr | head -1 | awk '{ print $1 }'`" = "Switched" ]; then
+            touch $SCM_PKG_VER_DIR/NEEDS_BUILD
+            rm -f $SCM_PKG_VER_DIR/BUILD_OK
+        fi
+
+        cd $WORK_DIR
+        print "Local directory: $SCM_PKG_VER_DIR exists, checking PASS: $PASS"
         if [ $PASS != "BUILD" ] ; then
             # Just need source directory to generate the dependency list so 
             # no need to clear build residue
-                print "PASS!= BUILD so Dir only needed to generate the dependency list; no need to clear build residue."
+            print "PASS!= BUILD so Dir only needed to generate the dependency list; no need to clear build residue."
             RETVAL=0
             return 0
         elif [ $PASS = "BUILD" ] ; then
             print "PASS=BUILD; now check if still NEEDS_BUILD."
             # Need source directory for build; now check its status
-            if [ -f $SCM_LOCAL_DIR/NEEDS_BUILD ] ; then
+            if [ -f $SCM_PKG_VER_DIR/NEEDS_BUILD ] ; then
                 print "PASS=BUILD, NEEDS_BUILD, too; ready to build dir now."
                 RETVAL=0
                 return 0
             # Following should not be needed since this routine shouldn't be
             #   called if BUILD_OK exists in build dir.
-            elif [ -f $SCM_LOCAL_DIR/BUILD_OK ] ; then
+            elif [ -f $SCM_PKG_VER_DIR/BUILD_OK ] ; then
                 print "PASS=BUILD, BUILD_OK so no need to rebuild."
                 RETVAL=0
                 return 0
@@ -384,31 +501,65 @@ prepareSCMDirectory() {
                     unsetup -j $SCM_PACKAGE $REVISION
                 fi
                 pretty_execute "eups remove -N $SCM_PACKAGE $REVISION"
-                pretty_execute "rm -rf $SCM_LOCAL_DIR"
+                pretty_execute "rm -rf $SCM_PKG_VER_DIR"
             fi
         fi
     fi
 
     # Now extract fresh source directory
-    mkdir -p $SCM_LOCAL_DIR
+    mkdir -p $SCM_PKG_VER_DIR
     step "Check out $SCM_PACKAGE $REVISION from $SCM_URL"
-    local SCM_COMMAND="git clone --depth=1 $SCM_URL $SCM_LOCAL_DIR "
-    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-    # Problem with this operation is that if package doesn't exist, it returns:
-    # "Initialized empty Git repository in /nfs/lsst/home/buildbot/RHEL6/gitwork/builds/TvT/work/git/LSSTPipe/.git/"
-    # and returns success!   
-    # URL should exist because validated when $SCM_URL is defined. 
-    # However, still need to fix up following error check (an ssh timeout, etc)
-    #OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-    verbose_execute $SCM_COMMAND
-    if [ $RETVAL = 1 ] ; then
-       return 1
+
+    git clone $SCM_URL $SCM_PKG_VER_DIR 1> clone.stdout 2> clone.stderr
+    RETVAL=$?
+    if [ ! -e $SCM_PKG_VER_DIR/.git ]; then
+        print_error "FAILURE: ==============================="
+        print_error "FAILURE: to find $SCM_PKG_VER_DIR/.git. Was there an ssh timeout?"
+        print_error "FAILURE: stderr:"
+        cat clone.stderr
+        print_error "FAILURE: ==============================="
+        RETVAL=1
+        rm -f clone.stdout clone.stderr
+        return $RETVAL
+    elif [ $RETVAL != 0 ] ; then
+        print_error "FAILURE: ==============================="
+        print_error "FAILURE: Well something went wrong, what does the error file say?"
+        print_error "FAILURE: stdout:"
+        cat clone.stdout
+        print_error "FAILURE: ==============================="
+        print_error "FAILURE: stderr:"
+        cat clone.stderr
+        print_error "FAILURE: ==============================="
+        rm -f clone.stdout clone.stderr
+        return $RETVAL
     fi
+    cd $SCM_PKG_VER_DIR
+    #switch to desired git-branch; first try $GIT_BRANCH then 'master'
+    git checkout $GIT_BRANCH 1> clone.stdout 2> clone.stderr
+    if [ $? != 0 ] ; then
+        print_error "WARNING: $SCM_PACKAGE does not have branch: $GIT_BRANCH, trying branch: master."
+        git checkout master 1> clone.stdout 2> clone.stderr
+        if [ $? != 0 ] ; then
+            print_error "FAILURE: ==============================="
+            print_error "FAILURE: Failed to change current git branch to either $GIT_BRANCH or 'master'"
+            print_error "FAILURE: stderr:"
+            cat clone.stderr
+            print_error "FAILURE: ==============================="
+            rm -f clone.stdout clone.stderr
+            RETVAL=1
+            return $RETVAL
+        else
+            print_error "WARNING: $SCM_PACKAGE does not have branch: $GIT_BRANCH, using branch: master, instead."
+        fi
+    fi
+    cat clone.stdout
+    rm -f clone.stdout clone.stderr
+    cd $WORK_DIR
 
     # Set flag indicating ready for source build
-    touch $SCM_LOCAL_DIR/NEEDS_BUILD
+    touch $SCM_PKG_VER_DIR/NEEDS_BUILD
     if [ $? != 0 ]; then
-        print_error "Unable to create temp file: $SCM_LOCAL_DIR/NEEDS_BUILD for prepareSCMDirectory."
+        print_error "Unable to create temp file: $SCM_PKG_VER_DIR/NEEDS_BUILD for prepareSCMDirectory."
         RETVAL=1
         return 1
     fi
@@ -416,3 +567,44 @@ prepareSCMDirectory() {
     RETVAL=0
     return 0
 }
+
+
+
+#---------------------------------------------------------------------------
+#
+#   NOTE: this is only used for a package's 'master' repo fetch
+#
+# Input: 
+#     1: git repo name; e.g. afw.git
+#     2: local directory name in which to load extracted package
+# Required: 
+#     LSST_DMS   
+# Return:
+clonePackageMasterRepository() {
+    # extract SCM clone ** from master **
+    if [ "X$1" = "X" ]; then
+        echo "Missing all arguments to clonePackageMasterRepository()."
+        return 1
+    fi
+    PACKAGE=$1
+
+    if [ "X$2" = "X" ]; then
+        echo "Missing output directory name in clonePackageMasterRepository()."
+        return 1
+    fi
+    LOCAL_DIR=$2
+
+    if [ "X$LSST_DMS" = "X" ]; then
+        echo "Missing LSST_DMS git web address in clonePackageMasterRepository()."
+        return 1
+    fi
+
+    echo "Package: $PACKAGE LocalDirectory: $LOCAL_DIR"
+
+    git clone $LSST_DMS/$PACKAGE --depth=1 $LOCAL_DIR
+    if [ "$?" != "0" ]; then
+        echo "Failed to clone $LSST_DMS/$PACKAGE . "
+        return 1
+    fi
+}
+

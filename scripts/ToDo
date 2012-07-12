@@ -1,34 +1,22 @@
-Last updated: 20 Feb 2012
+Last updated: 12 July 2012
 
 BugList
+* clang stack update is not working; exception in ctrl_sched
+  (12 Jul 2012)
+
 * Extract buildmaster/slave passwords into python code segment for inline 
   import. Then that new code segment is never installed into git.
-  Currently 20 Feb 2012, Passwords are masked when installed in git repository.
+  Currently  Passwords are masked when installed in git repository.
 
 BuildBot Implementation Specifics
-* Select web-form use authentication scheme
-    Two possibilities:
-    1) use same list that's allowed write access to the svn/git repository; or
-    2) on user request and run manager approval, add user id to a 
-       separately maintained run-weekly list. 
+* Determine what build products, logs, etc should be archived or deleted,
+  then implement. Remove: doxy's /tmp files, >1 month doxydocs, ..
   (13 Jan 12: TBD)
-  SRP NOTE: Starting builds should be restricted from the public.
-
-* Determine what build products, logs, etc should be archived, then implement.
-  (13 Jan 12: TBD)
-
-* A dependency which is not in the current.list (i.e. a brand new package 
-  which has not been released yet) is detected in dependency list generation 
-  and then processed with the rest of the dependencies.  However a new primary
-  root, such as datarel, is still not processed.
-  (16 Feb 12: TBD)
 
 * Trigger Package Build on entry of package name should allow previously 
   unknown git package name to be built.  
   (13 Jan 12:  TBD)
 
-* non-position dependent command line argument code that Steve created for one of the scripts, and getting that ported over to the other scripts 
-  (13 Jan 12: SOME DONE: gitTrunkVsTrunk.sh, runProduction.sh; TBD all the rest)
 
 * email handling
   * determining the guru recipients via either
@@ -37,99 +25,30 @@ BuildBot Implementation Specifics
   * chosen:  last git modifier & special lsst-build notification list
   (13 Jan 12: MOSTLY DONE; need to add special lsst-build alias)
 
-* ensure that all buildbot VMs have the following defined and documented:
-        EUPS_USERDATA= <defined in master.cfg for each slave>
-        $cat $EUPS_USERDATA/startup.py
-          hooks.config.site.lockDirectoryBase = None
-  (13 Jan 12: DONE; all new builders must invoke: 'update buildbot environment')
+* for git-change builds, need email failure notification to instigator 
+  (12 Jul 2012)
 
-Buildbot Builders
- * Integration and Test of Individual Packages
-    * All Packages Build&Test (run nightly or On Demand)
-        * of Master package vs Master stack {VRO->Master,Beta, Stable}
-          * Name: "Full Trunk Vs Trunk"
-          * Status: master DONE, slave IN PROGRESS
-          * Note: success triggers Master doxygen documentation build
-          * Note: success triggers build-verify Master production run
+* package_is_special should read from file in <buidlbot>/etc/DoNotProcess.list
+  (10 May 2012)
 
-        * of Beta package vs Beta stack {VRO->Beta, Stable)
-          * Name: "Full Beta Vs Beta"
-          * Status: TBD
-          * Note: success triggers Beta doxygen documentation build
-          * Note: success triggers build-verification Beta production run
-   
-        * of Interesting Tag package vs Interesting Tag stack {VRO->ITag,Master,Beta,Stable} (triggered from web form)
-          * Name: "Full ITag Vs ITag"
-          * Status: TBD  (not yet(!) recommended by developers)
-          * Note: success triggers ITag doxygen documentation build
-          * Note: success triggers build-verification ITag production run
-   
-    * Single Package Build&Test  (run On Demand, triggered on git change)
-        * of a Master package {VRO->Master}
-          * Name: "On Demand Package Vs Trunk"
-          * Status: master/slave DONE
+* need new slave to automatically rebuild clang's LSST_HOME stack routinely
+  (23 Apr 2012)
 
-        * of a Master package {VRO->Master}
-          * Name: "Git Trigger Package Vs Trunk"
-          * Status: master/slave TBD
-   
- * Integration and Test of Pipeline Processing
-    * Weekly Production Run testing DRP (run On-Demand)
-        * of Master build-products
-          * Name: "Master DRP Weekly"
-          * Status: master trigger&On Demand TBD, slave IN PROGRESS
-
-        * of Beta build-products
-          * Name: "Beta DRP Weekly"
-          * Status: Later; TBD
-
-        * of Released build-products
-          * Name: "Release DRP Weekly"
-          * Status: Later; TBD
-   
- * Validation of Release Stack Installation
-    * Released-Product Installation
-      * Name: "Nightly Release Build"
-      * Status: master/slave DONE
-   
- * Doxygen documentation build (triggered on I&T build success)
-    * Master doxygen documentation build
-      * Name: "Trunk Doxygen"
-      * Status: slave DONE, master trigger DONE
-
-    * Release and Beta doxygen documentation build
-      * Name: "Doxygen Build"
-      * Status:  DONE
-
-    * Interesting Tag documentation build
-      * Name: "One-off Tag Doxygen"
-      * Status: TBD (developer recommended)
-
+* implement a web-for-based user-initiated drpRun using their own manifest.
+  (20 apr 2012: need next buildbot's release which has much better form edits))
 
 Winter 2012 Milestones for Buildbot Scripts 
   Extracted: http://dev.lsstcorp.org/trac/wiki/Winter2012/DevelToolRequirements
 
 * Task: Review and rewrite the buildbot scripts to fix the issues below:
-  * build in parallel,
-    * Status: DONE for build, NEVER for unit testing due to race conditions
   * use ccache,
     * Status: (ON HOLD - looked at this, but set at a low priority
                compared to other tasks).
-  * simplify dependency management,
-    * Status: DONE
-  * send mail on failure
-    * Status: DONE
   * create tickets on failure
     * Status: TBD 
-  * ensure easily switched to a new compiler or OS
-    * Status: DONE; switch to new gcc version and new OS was not a problem;
-              it was a problem for the code it operates upon, though
 
-* Task: Build buildbot script that builds a just-tagged package against its declared dependencies.
-  * Status: TBD
-
-* Task: Extend above script to check package's ABI against its previous version
-  * if no change, rebuild all packages depending on the just-tagged package.
+* Task: Check package's ABI against its previous version
+  * if changed, rebuild all packages depending on the just-tagged package.
     * use an ABI checker such as  
       http://ispras.linux-foundation.org/index.php/ABI_compliance_checker and,
     * Status: TBD; currently implemented to determine the set of all packages
@@ -139,21 +58,6 @@ Winter 2012 Milestones for Buildbot Scripts
 
 ========================================================================
 ========================================================================
-========================================================================
-Note added: 12 Jan 2012
-For the venerable gitTrunkVsTrunk.sh, to salt the system with a brand-new 
-package by hand:
-  $ lsst5
-  cd ~/RHEL6/gitwork/builds/TvT/work/git
-  mkdir <newpkg>
-  cd <newpkg>
-  ## determine the gitid of the <newpkg> master
-  git clone --depth=1 $LSST_DMS/<newpkg>.git <gitId>
-  setup -r . <newpkg>
-  scons
-  eups declare -c -r . <newpkg> <gitid>
-  eups list -c <newpkg>   # Check <newpkg> exists, is current, & NOT LOCAL:
-  
 ========================================================================
 Note added: 13 Jan 2012
 
@@ -175,9 +79,3 @@ Document also provides: definition of terms, a clear description of each build ,
 ========================================================================
 ========================================================================
 ========================================================================
-
-
-========================================================================
-========================================================================
-========================================================================
-

@@ -1,7 +1,7 @@
 #==============================================================
 # Set a global used for error messages to the buildbot guru
 #==============================================================
-BUCK_STOPS_HERE="rallsman@noao.edu"
+BUCK_STOPS_HERE="robyn@LSST.org"
 
 #--
 # Library of Functions:
@@ -126,7 +126,7 @@ split() {
 # params: file_description filename dest_host remote_dir additional_dir url
 # for example copy_log config.log buildbot@tracula /var/www/html/logs /afw/trunk http://dev/buildlogs
 copy_log() {
-    local date_dir="`hostname`/`date +%Y`/`date +%m`/`date +%d`/`date +%H.%M.%S`"
+    local local_host="`hostname`"
 
     local file_description=$1
     local filename=$2
@@ -139,27 +139,29 @@ copy_log() {
     elif [ "$7" ]; then
         print "too many arguments to copy_log"
     else
-        local url_suffix=$additional_dir/$date_dir/$filename
-        local remote_path=$remote_dir/$url_suffix
-        local dest=$dest_host:$remote_dir/$url_suffix
-        ssh $dest_host "mkdir -p $remote_dir/$additional_dir/$date_dir"
-        echo "pwd is "$PWD
-        #scp -q $filename $dest
-        # put some HTML around the copied file so you it's formatted in the browser
+        local url_suffix=$additional_dir/$filename
+        local remote_path=$remote_dir/$additional_dir
+        local dest=$dest_host:$remote_path
+
+        ssh $dest_host "mkdir -p $remote_path"
+        echo "pwd is $PWD"
+
+        # put HTML around copied file so it's formatted in the browser
         echo "<HTML><BODY><PRE>" >/tmp/foo.$$
         cat $filename >>/tmp/foo.$$
         echo "</PRE></BODY></HTML>" >>/tmp/foo.$$
-        scp -q /tmp/foo.$$ $dest
-
+        scp -q /tmp/foo.$$ $dest/$filename
         if [ $? != 0 ]; then
-            print_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+            print_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
             print_error "!!! Failed to copy $filename to $dest"
-            print_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+            print_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
         else
-            ssh $dest_host "chmod +r $remote_path"
-            if [ $url ]; then
+            ssh $dest_host "chmod +r $remote_path/$filename"
+            if [ $? != 0 ]; then
             # echo instead of print, because monitor class doesn't trim leading spaces
-            echo "log file $file_description saved to $url/$url_suffix"
+                echo "Failed to change access permissions on $remote_path/$filename"
+            else
+                echo "log file $filename saved to $url/$url_suffix"
             fi
         fi
         rm /tmp/foo.$$

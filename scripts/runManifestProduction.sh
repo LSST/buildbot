@@ -33,12 +33,12 @@ usage() {
     echo "Initiate requested production code then detach control."
     echo
     echo "Options:"
-    echo "                --verbose: print out extra debugging info"
-    echo "                  --force: if package already installed, re-install "
+    echo "                --debug: print out extra debugging info"
     echo "       --ccdCount <count>: number of CCDs to use during run"
-    echo "   --astro_data <version>: version of astrometry_net_data to use"
     echo "         --runType <type>: type of run being done; Select one of:"
     echo "                           { buildbot }; default=buildbot"
+    echo "   --astro_data <version>: version of astrometry_net_data to use"
+    echo "      --input_data <name>: name of input data set"
     echo "        --manifest <path>: manifest list for eups-setup."
     echo "                  --beta : flags use of beta instead of master packages."
     echo "    --builder_name <name>: buildbot's build name assigned to run"
@@ -46,19 +46,11 @@ usage() {
 }
 #--------------------------------------------------------------------------
 
-check1() {
-    if [ "$1" = "" ]; then
-        usage
-        exit 1
-    fi
-}
-
-
 # Setup LSST buildbot support fnunctions
+source ${0%/*}/gitConstants.sh
 source ${0%/*}/build_functions.sh
 source ${0%/*}/gitBuildFunctions.sh
 
-DEBUG=debug
 DEV_SERVER="lsstdev.ncsa.uiuc.edu"
 WEB_HOST="lsst-build.ncsa.illinois.edu"
 WEB_ROOT="/usr/local/home/buildbot/www/"
@@ -67,7 +59,7 @@ WEB_ROOT="/usr/local/home/buildbot/www/"
 # -- get arguments --
 # -------------------
 
-options=$(getopt -l verbose,debug,ccdCount:,runType:,tag:,beta,log_dest:,log_url:,builder_name:,build_number:,astro_net_data:,input_data:,manifest: -- "$@")
+options=$(getopt -l debug,ccdCount:,runType:,beta,builder_name:,build_number:,astro_net_data:,input_data:,manifest: -- "$@")
 
 BUILDER_NAME=""
 BUILD_NUMBER=0
@@ -78,18 +70,16 @@ MANIFEST=
 while true
 do
     case $1 in
-        --verbose)      VERBOSE=true; shift;;
-        --debug)        VERBOSE=true; shift;;
+        --debug)        DEBUG=true; shift;;
         --ccdCount)     CCD_COUNT=$2;  shift 2;;
         --runType)      RUN_TYPE=$2; shift 2;;
         --beta)         USE_BETA=true; shift;;
-        --tag)          TAG_LIST=$2; shift 2;;
         --builder_name) BUILDER_NAME=$2; shift 2;;
         --build_number) BUILD_NUMBER=$2; shift 2;;
         --astro_net_data)   ASTRO_NET_DATA_VERSION=$2; shift 2;;
         --input_data)   INPUT_DATA=$2; shift 2;;
         --manifest)     MANIFEST=$2; shift 2;;
-        *) echo "parsed options; arguments left are:: $* ::"
+        *) [ "$*" != "" ] && echo "parsed options; arguments left are:$*:"
              break;;
     esac
 done
@@ -97,7 +87,7 @@ done
 
 if [ "$CCD_COUNT" -le 0 ]; then
     usage
-    exit 1
+    exit $BUILDBOT_FAILURE
 fi
 
 source $LSST_HOME/loadLSST.sh
@@ -126,12 +116,14 @@ WORK_DIR=`pwd`
 for PACKAGE in testing_endtoend; do
     [[ "$DEBUG" ]] && echo "/\/\/\/\/\/\/\/\/\ Extracting package: $PACKAGE /\/\/\/\/\/\/\/\/"
     [[ "$DEBUG" ]] && echo ""
+
     # SCM checkout ** from master **
-    prepareSCMDirectory $PACKAGE BUILD
+    prepareSCMDirectory $PACKAGE master BUILD
     if [ $RETVAL != 0 ]; then
         echo "Failed to extract $PACKAGE source directory during setup for runDrp.sh use."
-        exit 1
+        exit $BUILDBOT_FAILURE
     fi
+
     # setup all dependencies required by $PACKAGE
     cd $SCM_LOCAL_DIR
     [[ "$DEBUG" ]] && echo ""
@@ -158,9 +150,9 @@ done
 ##
 # ensure full dependencies file is available
 ##
-if [ ! -f "$MANIFEST" ]; then
-    echo "error: Can't find $MANIFEST. Exiting."
-    exit 1
+if [ ! -e $MANIFEST ] || [ "`cat $MANIFEST | wc -l`" = "0" ]; then
+    echo "Failed to find file: $MANIFEST, in buildbot work directory."
+    exit $BUILDBOT_FAILURE
 fi
 
 # Setup the entire build environment for a production run
@@ -175,7 +167,7 @@ eups list -s
 echo "-----------------------------------------------------------------"
 
 
-# Explictily setup the astro data requested
+# Explicitly setup the astro data requested
 setup -j -r $ASTROMETRY_NET_DATA_DIR/$ASTRO_NET_DATA_VERSION astrometry_net_data 
 
 echo ""
@@ -193,11 +185,16 @@ cd $TESTING_ENDTOEND_DIR
 #echo "Exiting $0 after detaching drpRun process and reassigning I/O streams to log: $WORK_DIR/setup/build$BUILD_NUMBER/drpRun.log ."
 
 
-#27May2012 Using defaults except for ccd count on drpRun.ps per K-T
-#$TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT --runType $RUN_TYPE --input $INPUT_DATA
+echo "**NOT DOING until slave on lsst6/9**: $TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT "
+exit $BUILDBOT_WARNINGS
+
+
 echo "$TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT -m $BUCK_STOPS_HERE --testOnly"
 $TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT -m $BUCK_STOPS_HERE --testOnly
 
 RUN_STATUS=$?
 echo "Exiting $0 after drpRun; run status: $RUN_STATUS ."
-exit  $RUN_STATUS
+if  [ $RUN_STATUS = 0 ]; then
+    exit $BUILDBOT_SUCCESS
+fi
+exit  $BUILDBOT_FAILURE

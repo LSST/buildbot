@@ -4,14 +4,44 @@
 # Installation of Release Packages should occur in either:
 #  * the system space or 
 #  * alternate space named by: '-lsstdir' parameter
+# Syntax: $0 [--lsstdir dir]  [--no_doxygen] [--tag current] [--astro_net_data data --astro_net_data_dir data_dir] package [packages to check]
 
-#unset LSST_DEVEL
+source ${0%/*}/gitConstants.sh
 
-if [[ $1 == "" ]]
-then
-    echo "usage: $0 [-lsstdir dir]  [-no_doxygen] [--tag=current] [-astrometry_net_data data data_dir] package [packages to check]"
-    exit 1
+options=$(getopt -l no_doxygen,tag:,astro_net_data:,astro_net_data_dir:,lsstdir: -- "$@")
+
+ASTROMETRY_NET_DATA=""
+ASTROMETRY_NET_DATA_DIR=""
+LSST_DIR=""
+EXTRA_ARGS=""
+
+while true
+do
+    case $1 in
+        --no_doxygen) NO_DOXYGEN=true; shift;;
+        --astro_net_data) ASTROMETRY_NET_DATA=$2; shift 2;;
+        --astro_net_data_dir) ASTROMETRY_NET_DATA_DIR=$2; shift 2;;
+        --tag) EXTRA_ARGS="--tag=$2"; shift 2;;
+        --lsstdir) LSST_DIR=$2; export LSST_HOME=$LSST_DIR; shift 2;;
+        *) [ "$*" != "" ] && echo "parsed options; arguments left are:$*:"
+             break;;
+    esac
+done
+
+if [ "x$LSST_DIR" = "x" ]; then
+    LSST_DIR="."
+    export LSST_HOME=`pwd`
 fi
+
+if [ "x$ASTROMETRY_NET_DATA" = "x" ] && [ "x$ASTROMETRY_NET_DATA_DIR" = "x" ] ; then
+    echo -n ""
+elif [ "x$ASTROMETRY_NET_DATA" != "x" ] && [ "x$ASTROMETRY_NET_DATA_DIR" != "x" ] ; then
+    echo -n ""
+else
+    echo "FATAL: Usage: $0 [--lsstdir dir]  [--no_doxygen] [--tag current] [--astro_net_data data --astro_net_data_dir data_dir] package [packages to check]"
+    exit $BUILDBOT_FAILURE
+fi
+
 
 source ${0%/*}/build_functions.sh
 
@@ -20,38 +50,6 @@ WEB_ROOT=/var/www/html/doxygen
 # URL for package list, in install order
 # http://dev.lsstcorp.org/dmspkgs/manifests/LSSTPipe.manifest
 
-# figure out LSST dir
-if [[ $1 == "-lsstdir" ]]
-then
-    LSST_DIR=$2
-    export LSST_HOME=$LSST_DIR
-    shift
-    shift
-else
-    LSST_DIR="."
-    export LSST_HOME=`pwd`
-fi
-
-if [ "$1" = "-no_doxygen" ]; then
-    echo "----- not copying doxygen -----"
-    NO_DOXYGEN="true"
-    shift
-fi
-
-if [ "$1" = "--tag=current" ]; then
-    EXTRA_ARGS=$1;
-    shift
-fi
-
-ASTROMETRY_NET_DATA=""
-echo "1 ==> "$1
-if [ "$1" = "-astrometry_net_data" ]; then
-	ASTROMETRY_NET_DATA=$2
-	ASTROMETRY_NET_DATA_DIR=$3
-	shift
-	shift
-	shift
-fi
 
 INSTALL_PACKAGE=$1
 
@@ -61,78 +59,79 @@ print "Before loadLSST.sh: LSST_HOME: $LSST_HOME   LSST_DEVEL: $LSST_DEVEL"
 print "Before loadLSST.sh: EUPS_PATH: $EUPS_PATH"
 source $LSST_DIR/loadLSST.sh
 if [ $? != 0 ]; then
-    echo "loadLSST.sh failed"
-    exit 1
+    echo "FATAL: loadLSST.sh failed."
+    exit $BUILDBOT_FAILURE
 fi
 print "After loadLSST.sh: LSST_HOME: $LSST_HOME  LSST_DEVEL: $LSST_DEVEL"
 print "After loadLSST.sh: EUPS_PATH: $EUPS_PATH"
+for DIR in $LSST_HOME $LSST_DEVEL; do
+    eups admin clearCache -Z $DIR
+    if [ $? != 0 ] ; then
+        echo "FATAL: \"eups admin clearCache -Z $DIR\" failed."
+        exit $BUILDBOT_FAILURE
+    fi
+    eups admin buildCache -Z $DIR
+    if [ $? != 0 ] ; then
+        echo "FATAL: \"eups admin buildCache -Z $DIR\" failed."
+        exit $BUILDBOT_FAILURE
+    fi
+done
 
 if [ "$ASTROMETRY_NET_DATA" ]; then
 	eups declare astrometry_net_data $ASTROMETRY_NET_DATA -r $ASTROMETRY_NET_DATA_DIR
 fi
 
-pretty_execute lsstpkg install $EXTRA_ARGS $INSTALL_PACKAGE
-#pretty_execute eups --debug=raise distrib install $EXTRA_ARGS $INSTALL_PACKAGE
-INSTALL_SUCCEEDED=$RETVAL
-if [ $INSTALL_SUCCEEDED != 0 ]; then
-    echo "install $INSTALL_PACKAGE failed"
+echo "eups -v -v -v  --debug=raise distrib install $EXTRA_ARGS $INSTALL_PACKAGE"
+eups -v -v -v  --debug=raise distrib install $EXTRA_ARGS $INSTALL_PACKAGE
+if [ $? != 0 ]; then
+    echo "FATAL: install of: \"$INSTALL_PACKAGE\" failed."
     eups list -s
-#    echo "-------------------- `find . -name build.log` --------------------"
-#    cat `find . -name build.log`
-#    echo "-------------------- `find . -name config.log` --------------------"
-#    cat `find . -name config.log`
-#    exit 1
+    exit $BUILDBOT_FAILURE
 fi
-
-print "dollar at is equal to $@"
 
 # check for packages
-if [ $INSTALL_SUCCEEDED == 0 ]; then
-    step "Check for installed packages"
-    for CHECK_PACKAGE in $@
-      do
-      if [ $CHECK_PACKAGE != "lsstactive" ]; then # a phantom package
-	  PACKAGE_COUNT=`eups list $CHECK_PACKAGE | wc -l`
-	  if [ $PACKAGE_COUNT = "1" ]; then
-	      echo "  - Package '$CHECK_PACKAGE' is installed."
-	  elif [ $PACKAGE_COUNT = "0" ]; then
-	      echo "  - Package '$CHECK_PACKAGE' is not installed:";
-	      eups list
-	      exit 1 # failed - no package installed
-	  else
-	      echo "  - Unexpected: found more than one $CHECK_PACKAGE installed:";
-	      pretty_execute "eups list $CHECK_PACKAGE"
-	      exit 1
-	  fi
-      fi
-    done
-fi
+step "Check for installed packages"
+for CHECK_PACKAGE in $@ ; do
+    if [ $CHECK_PACKAGE != "lsstactive" ]; then # a phantom package
+	    PACKAGE_COUNT=`eups list $CHECK_PACKAGE | wc -l`
+	    if [ $PACKAGE_COUNT = "1" ]; then
+	        echo "INFO:  - Package \"$CHECK_PACKAGE\" is installed."
+	    elif [ $PACKAGE_COUNT = "0" ]; then
+	        echo "FATAL:  - Package \"$CHECK_PACKAGE\" is not installed:";
+	        eups list
+	        exit $BUILDBOT_FAILURE # failed - no package installed
+	    else
+	        echo "FATAL:  - Unexpected: found more than one: \"$CHECK_PACKAGE\" installed:";
+	        pretty_execute "eups list $CHECK_PACKAGE"
+	        exit $BUILDBOT_FAILURE
+	    fi
+    fi
+done
 
 # only copy docs if this machine has a /var/www/html/doxygen
 step "Copy doxygen docs to www:"
 if [ "$NO_DOXYGEN" ]; then
-    echo "Not copying Doxygen docs by request"
+    echo "INFO: Not copying Doxygen docs by request."
 elif [ -d $WEB_ROOT ]; then
     for DOC_DIR in `find . -wholename \*doc/doxygen -o -wholename \*doc/htmlDir | grep -v EupsBuildDir`; do
 	OLD_IFS=$IFS
 	IFS="/" # now bash will split on / instead of white space
 	I=0
 	for PATH_ELEM in $DOC_DIR; do
-#	    echo "      + $PATH_ELEM"
 	    ELEMS[I]=$PATH_ELEM
 	    I=$I+1
 	done
 	PACKAGE_NAME=${ELEMS[2]}
 	PACKAGE_VERSION=${ELEMS[3]}
-	echo "  - $PACKAGE_NAME v$PACKAGE_VERSION"
+	echo "INFO:  - $PACKAGE_NAME v$PACKAGE_VERSION"
 	IFS=$OLD_IFS # restore default splitting behavior
 
 	WWW_DIR=$WEB_ROOT/release/$PACKAGE_NAME/$PACKAGE_VERSION
 	WWW_CURRENT=$WEB_ROOT/release/$PACKAGE_NAME/current
 	if [ -d $WWW_DIR ]; then
-	    echo "    $WWW_DIR already exists; not overwriting"
+	    echo "INFO:    $WWW_DIR already exists; not overwriting"
 	else
-	    echo "    $WWW_DIR Doesn't exist; copying docs"
+	    echo "INFO:    $WWW_DIR Doesn't exist; copying docs"
 	    mkdir -m 755 -p $WWW_DIR
 	    chmod 755 $WWW_DIR # should have happened in prev command -- why not?
 	    cp -r $DOC_DIR/* $WWW_DIR
@@ -144,14 +143,12 @@ elif [ -d $WEB_ROOT ]; then
 	ln -s $WWW_DIR $WWW_CURRENT
     done
 else
-    echo "Not copying Doxygen docs - $WEB_ROOT does not exist"
+    echo "INFO: Not copying Doxygen docs - $WEB_ROOT does not exist"
 fi
 
 step "Build provenance:"
 # build provenance info
-pretty_execute "gcc -v"
+pretty_execute "$CC -v"
 pretty_execute "eups list"
 
-# TODO: uncomment when ticket 1856 is fixed.
-#exit $INSTALL_SUCCEEDED
-exit 0
+exit $BUILDBOT_SUCCESS
