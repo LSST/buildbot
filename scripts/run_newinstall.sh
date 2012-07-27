@@ -1,11 +1,13 @@
 #! /bin/bash
 
+source ${0%/*}/gitConstants.sh
+
 #curl -o newinstall.sh http://dev.lsstcorp.org/tstdms/newinstall.sh
 #curl -o newinstall.sh http://lsstdev.ncsa.uiuc.edu/dmspkgs/newinstall.sh
 curl -o newinstall.sh http://dev.lsstcorp.org/pkgs/std/w12/newinstall.sh
 if [ ! -f newinstall.sh ]; then
     echo "Failed to fetch newinstall.sh"
-    exit 1
+    exit $BUILDBOT_FAILURE
 fi
 
 export LSST_HOME=`pwd`
@@ -13,23 +15,23 @@ echo "pwd = $LSST_HOME"
 bash ./newinstall.sh lsstactive
 if [ $? != 0 ]; then
     echo "newinstall.sh failed"
-    exit 1
+    exit $BUILDBOT_FAILURE
 fi
 source loadLSST.sh
 if [ $? != 0 ]; then
     echo "loadLSST.sh failed"
-    exit 1
+    exit $BUILDBOT_FAILURE
 fi
 
-PYTHON_INSTALLED=`eups list -s python | wc -l`
+PYTHON_INSTALLED=`eups list python | wc -l`
 if [ $PYTHON_INSTALLED = "1" ]; then
-    exit 0 # succeeded - found python installed
+    exit $BUILDBOT_SUCCESS # succeeded - found python installed
 elif [ $PYTHON_INSTALLED = "0" ]; then
     echo "No python installed:";
-    eups list -s python
-    exit 1 # failed - no python installed
+    eups list  python
+    exit $BUILDBOT_FAILURE # failed - no python installed
 else
     echo "Unexpected: found more than one python installed:";
-    eups list -s python
-    exit 1
+    eups list  python
+    exit $BUILDBOT_FAILURE
 fi

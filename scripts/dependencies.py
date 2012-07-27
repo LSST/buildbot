@@ -6,24 +6,25 @@ import operator
 import os,string
 
 # Select the extent of the debug messages: 'True' provides more output.
-#DEBUG = True
-DEBUG = False
+DEBUG = True
+#DEBUG = False
 
 class PackageDependency:
 
     def gather(self,myeups,pkg,ver,depth,tags):
-        #print "-"*depth,"CALLED: %s,%s depth = %d" % (pkg,ver,depth)
+        print "-"*depth,"CALLED: %s,%s depth = %d" % (pkg,ver,depth)
     
         if pkg is "implicitProducts":
             return
 
         prod = myeups.findSetupProduct(pkg)
         if not prod:
-            print "%s is not setup, maybe it's a new external" % (pkg)
+            if DEBUG:
+                print "%s is not setup, maybe it's a new external" % (pkg)
             try:
                 prod = myeups.getProduct(pkg,ver)
             except:
-                print "FAILURE: %s %s is not found in any stack" % (pkg,ver)
+                print "WARNING: %s %s is not found in any stack" % (pkg,ver)
                 return
             
         tbl = prod.getTable()
@@ -92,6 +93,7 @@ class sp:
         self.manifest = self.readFileIntoList("manifest.list")
         print "self.manifest is ",self.manifest
         for pkg in self.manifest:
+            print "package = ",pkg
             name = pkg
             version = self.manifest[name]
             p = PackageDependency()
@@ -163,7 +165,8 @@ class sp:
 p = sp()
 print "Command line: ",sys.argv
 if p.createDependencyLists(sys.argv[1:]) is False:
-    print "error creating dependency lists"
+    print "FAILED to create dependency lists"
+    sys.exit(1)
 else:
     list = p.createNeedsBuildList()
 

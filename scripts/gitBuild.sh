@@ -2,11 +2,13 @@
 # install a requested package from version control, and recursively
 # ensure that its minimal dependencies are installed likewise
 
-DEBUG=debug
 DEV_SERVER="lsstdev.ncsa.uiuc.edu"
 SCM_SERVER="git.lsstcorp.org"
 WEB_ROOT="/var/www/html/doxygen"
 
+FAILED_TESTS_LOG="FailedTests.log"
+
+BUILD_FAILURE_BLAME="BlameNotification.list"
 
 #Exclude known persistent test failures until they are fixed or removed
 #   Code Developer should install into tests/SConscript:
@@ -24,12 +26,10 @@ source ${0%/*}/gitBuildFunctions2.sh
 # -- get arguments --
 # -------------------
 
-options=$(getopt -l verbose,boot,force,dont_log_success,log_dest:,log_url:,builder_name:,build_number:,slave_devel:,production,no_tests,parallel:,package:,step_name:,on_demand,on_change -- "$@")
+options=$(getopt -l debug,boot,dont_log_success,log_dest:,log_url:,builder_name:,build_number:,slave_devel:,no_tests,parallel:,step_name:,on_demand,on_change -- "$@")
 
-LOG_SUCCESS=0
 BUILDER_NAME=""
 BUILD_NUMBER=0
-PRODUCTION_RUN=1
 DO_TESTS=0
 PARALLEL=2
 STEP_NAME="unknown"
@@ -40,55 +40,50 @@ SCM_PACKAGE=""
 while true
 do
     case $1 in
-        --verbose) VERBOSE=true; shift;;
-        --debug) VERBOSE=true; shift;;
-        --force) FORCE=true; shift;;
-        --dont_log_success) LOG_SUCCESS=1; shift;;
+        --debug) DEBUG=true; shift;;
+        --builder_name) BUILDER_NAME=$2; shift 2;;
+        --build_number) BUILD_NUMBER=$2; shift 2;;
         --log_dest) 
                 LOG_DEST=$2; 
                 LOG_DEST_HOST=${LOG_DEST%%\:*}; # buildbot@master
                 LOG_DEST_DIR=${LOG_DEST##*\:};  # /var/www/html/logs
                 shift 2;;
         --log_url) LOG_URL=$2; shift 2;;
-        --builder_name)
-                BUILDER_NAME=$2; 
-                print "BUILDER_NAME: $BUILDER_NAME"
-                shift 2;;
-        --build_number)
-                BUILD_NUMBER=$2;
-                print "BUILD_NUMBER: $BUILD_NUMBER"
-                shift 2;;
-        --production) PRODUCTION_RUN=0; shift 1;;
+        --step_name) STEP_NAME=$2; shift 2;;
         --no_tests) DO_TESTS=1; shift 1;;
         --parallel) PARALLEL=$2; shift 2;;
-        --package) PACKAGE=$2; shift 2;;
-        --step_name) STEP_NAME=$2; shift 2;;
         --on_demand) ON_DEMAND_BUILD=0; ONE_PASS_BUILD=0; shift 1;;
         --on_change) ON_CHANGE_BUILD=0; ONE_PASS_BUILD=0; shift 1;;
-        *) echo "parsed options; arguments left are: $*"
+        *) [ "$*" != "" ] && echo "parsed options; arguments left are:$*:"
              break;;
     esac
 done
 
+WORK_PWD=`pwd`
 
-echo "STEP_NAME = $STEP_NAME"
+# Ensure no residual failed-test error log from previous build 
+rm -rf $WORK_PWD/$FAILED_TESTS_LOG
+
 if [ "$STEP_NAME" = "unknown" ]; then
-    FAIL_MSG="Missing input argument '--step_name',  build step name must be specified."
-    emailFailure "Unknown"  "$BUCK_STOPS_HERE"
-    exit 1
+    print_error "FAILURE: ============================================================="
+    print_error "FAILURE: Missing input argument '--step_name',  build step name must be specified."
+    print_error "FAILURE: ============================================================="
+    exit $BUILDBOT_FAILURE
 fi
 
 if [ ! -d $LSST_DEVEL ] ; then
-    FAIL_MSG="LSST_DEVEL: $LSST_DEVEL, was not passed as environment variable and thus does not exist."
-    emailFailure "Unknown" "$BUCK_STOPS_HERE"
-    exit 1
+    print_error "FAILURE: ============================================================="
+    print_error "FAILURE: LSST_DEVEL: $LSST_DEVEL, was not passed as environment variable and thus does not exist."
+    print_error "FAILURE: ============================================================="
+    exit $BUILDBOT_FAILURE
 fi
 
 # Acquire Root PACKAGE Name; OnChange's version extracted from gitrepos addr
 if [ "$1" = "" ]; then
-    FAIL_MSG="Missing input argument: '--package', package name must be supplied."
-    emailFailure "Unknown" "$BUCK_STOPS_HERE"
-    exit 1
+    print_error "FAILURE: ============================================================="
+    print_error "FAILURE: Missing input argument: '--package', package name must be supplied."
+    print_error "FAILURE: ============================================================="
+    exit $BUILDBOT_FAILURE
 elif [ "$ON_CHANGE_BUILD" = "1" ]; then
     PACKAGE="$1"
 else
@@ -98,21 +93,18 @@ else
         PACKAGE="$SCM_PACKAGE"
         print "OnChange sets: PACKAGE:$PACKAGE:    STEP_NAME:  $STEP_NAME"
     else
-        FAIL_MSG="Change triggered builds require a valid url to the package repository as input.\n$1 is not formatted correctly."
-        emailFailure "$1" "$BUCK_STOPS_HERE"
-        exit 1
+        print_error "FAILURE: ============================================================="
+        print_error "FAILURE: Change triggered builds require a valid url to the package repository as input."
+        print_error "FAILURE: $1 is not formatted correctly."
+        print_error "FAILURE: ============================================================="
+        exit $BUILDBOT_FAILURE
     fi
 fi
 
-print "PACKAGE: $PACKAGE    STEP_NAME:  $STEP_NAME  SCM_PACKAGE: $SCM_PACKAGE"
-
-
-WORK_PWD=`pwd`
-
-#Allow developers to access slave directory
-umask 002
+print "PACKAGE: $PACKAGE    STEP_NAME:  $STEP_NAME"
 
 source $LSST_STACK"/loadLSST.sh"
+
 
 #*************************************************************************
 #First action...rebuild the $LSST_DEVEL cache
@@ -122,15 +114,17 @@ pretty_execute "eups admin buildCache -Z $LSST_DEVEL"
 #*************************************************************************
 step "Determine if $PACKAGE will be tested"
 
-package_is_special $PACKAGE
-if [ $? = 0 ]; then
-    print "Selected packages are not tested, $PACKAGE is one of them"
-    exit 0
-fi
 package_is_external $PACKAGE
 if [ $? = 0 ]; then 
-    print "External packages are not tested, $PACKAGE is one of them."
-    exit 0
+    print "External and pseudo packages are not tested, $PACKAGE is one of them."
+    exit $BUILDBOT_SUCCESS
+fi
+package_is_special $PACKAGE
+if [ $? = 0 ]; then
+    print "WARNING: ============================================================="
+    print "WARNING: Selected packages are not tested, $PACKAGE is one of them"
+    print "WARNING: ============================================================="
+    exit $BUILDBOT_WARNINGS
 fi
 
 
@@ -141,33 +135,41 @@ queryPackageInfo $PACKAGE
 
 if [ -f $WORK_PWD/git/$PACKAGE/$REVISION/BUILD_OK ]; then
     print "PACKAGE: $PACKAGE $REVISION has BUILD_OK flag and will not be rebuilt."
-    exit 0
+    exit $BUILDBOT_SUCCESS
 else
     print "PACKAGE: $PACKAGE $REVISION does not have BUILD_OK flag and will be rebuilt."
 fi
 
 PACKAGE_SCM_REVISION=$RET_REVISION
 [[ "$DEBUG" ]] && print "PACKAGE: $PACKAGE PACKAGE_SCM_REVISION: $PACKAGE_SCM_REVISION"
+echo "EUPS listing of setup packages prior to build:"
+eups list -s
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 step "List build dependency tree for $PACKAGE"
 
+if [ ! -e $EXTERNAL_DEPS ] || [ ! -e $INTERNAL_DEPS ]; then
+    print_error "FAILURE: ============================================================="
+    print_error "FAILURE: work/$EXTERNAL_DEPS or work/$INTERNAL_DEPS do not exist for: $CUR_PACKAGE  $REVISION."
+    print_error "FAILURE: Possibly earlier buildstep 'extractDependencies' had an undetected failure."
+    print_error "FAILURE: ============================================================="
+    exit $BUILDBOT_FAILURE
+fi
 cat $EXTERNAL_DEPS
 cat $INTERNAL_DEPS
 
-while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
+while read CUR_PACKAGE CUR_VERSION; do
     cd $WORK_PWD
     step "Setup external dependencies for $CUR_PACKAGE"
     while read EX_CUR_PACKAGE EX_CUR_VERSION; do
-        pretty_execute "setup $EX_CUR_PACKAGE $EX_CUR_VERSION"
+        # 31 May 2012# pretty_execute "setup  $EX_CUR_PACKAGE $EX_CUR_VERSION"
+        pretty_execute "setup -j $EX_CUR_PACKAGE $EX_CUR_VERSION"
         if [ $? != 0 ]; then
             FAIL_MSG="Failed in eups-set of $EX_CUR_PACKAGE @ $EX_CUR_VERSION during first pass at dependency installation."
         fi
     done < "$EXTERNAL_DEPS"
 
-
-
-    echo "EUPS listing of setup packages:"
+    echo "EUPS listing of setup packages after external dependencies setup:"
     eups list -s
 
     step "Checking $CUR_PACKAGE $CUR_VERSION status"
@@ -176,16 +178,10 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
     # --            compilation is required and not a reload to check 
     # --            altered lib signatures or dependencies.
     # ---------------------------------------------------------------------
-    print "cur_package is $CUR_PACKAGE   revision is $CUR_VERSION"
-    [[ "$DEBUG" ]] && print "git/$CUR_PACKAGE/$CUR_VERSION/BUILD_OK"
 
     if  [ -f "git/$CUR_PACKAGE/$CUR_VERSION/BUILD_OK" ] ; then
         [[ "$DEBUG" ]] && print "Local src directory is marked BUILD_OK"
-        # srp - jan 24 2012 - change next line to get current version which
-        # is already installed.
-        #pretty_execute "setup -j  $CUR_PACKAGE $CUR_VERSION"
-        pretty_execute "setup -k -t current $CUR_PACKAGE"
-        print "after setup in OK check, RETVAL = $RETVAL"
+        pretty_execute "setup -j -t current $CUR_PACKAGE"
         if [ $RETVAL = 0 ] ; then
             print "Package/revision is already completed. Skipping build."
             print "using this version:"
@@ -204,13 +200,17 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
         elif [ "$CUR_PACKAGE" == $STEP_NAME ]; then
             echo "This is the target package for building.  Continuing."
         elif [ -e $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_FAIL ] ; then 
-            FAIL_MSG="$CUR_PACKAGE failed to successfully build earlier in the one-pass ordering.\n\n"
-            emailFailure "$STEP_NAME" "$BUCK_STOPS_HERE"
-            exit 2
+            print_error "FAILURE: ============================================================="
+            print_error "FAILURE: $CUR_PACKAGE failed to successfully build earlier in the one-pass ordering."
+            print_error "FAILURE: ============================================================="
+            exit $BUILDBOT_WARNINGS
         else 
-            FAIL_MSG="$CUR_PACKAGE is a dependent package of $STEP_NAME that was not marked as pre-built.\nPossibly '~/RHEL6/etc/LsstStackManifest.txt' is out of order or missing a dependency declaration.\n\nBetter check which is the case."
-            emailFailure "$STEP_NAME" "$BUCK_STOPS_HERE"
-            clear_blame_data
+            print_error "FAILURE: ============================================================="
+            print_error "FAILURE: $CUR_PACKAGE is a dependent package of $STEP_NAME that was not marked as pre-built."
+            print_error "FAILURE: Possibly '~/RHEL6/etc/LsstStackManifest.txt' is out of order, missing a dependency declaration, or $CUR_PACKAGE has cyclic dependencies."
+            print_error "FAILURE: Better check which is the case."
+            print_error "FAILURE: ============================================================="
+            exit $BUILDBOT_FAILURE
         fi
     fi
 
@@ -223,57 +223,59 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
     cd $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION
     print $PWD
 
-    pretty_execute "setup -r . -k "
+    # 31 May 2012# pretty_execute "setup -r . -k "
+    pretty_execute "setup -r . -j "
     pretty_execute "eups list -s"
     saveSetupScript $BUILD_ROOT $CUR_PACKAGE $BUILD_NUMBER $PWD
 
     BUILD_STATUS=0
     unset BUILD_ERROR
+    rm $BUILD_ROOT/$FAILED_TESTS_LOG
 
     # compile lib and build docs; then test executables; then install.
     scons_tests $CUR_PACKAGE
-    pretty_execute "scons -j $PARALLEL opt=3 lib python doc"
+    pretty_execute "scons --verbose -j $PARALLEL opt=3 lib python doc"
     if [ $RETVAL != 0 ]; then
         BUILD_STATUS=2
-        BUILD_ERROR="failure of initial 'scons -j $PARALLEL opt=3 lib python' build ($BUILD_STATUS)."
+        BUILD_ERROR="Failure of initial 'scons -j $PARALLEL opt=3 lib python doc' build ($BUILD_STATUS)."
         print_error $BUILD_ERROR
     elif [ $DO_TESTS = 0 -a "$SCONS_TESTS" = "tests" -a -d tests ]; then 
         # Built libs & doc OK, now test executables (examples and tests) 
 
-	# don't run these in parallel, because some tests depend on other
-	# binaries to be built, and there's a race condition that will cause
-	# the tests to fail if they're not built before the test is run.
-        # RAA 23 Feb 2012 -- ctrl_sched/tests has race condition using -j#  
-        if [ "$CUR_PACKAGE" = "ctrl_sched"  -o "$CUR_PACKAGE" = "ctrl_events" ] ; then
-            pretty_execute "scons  opt=3 lib tests examples"
+	# Some tests depend on other binaries to be built, and there's a  race 
+    # condition causing test failure if they're not built before test is run.
+        if [ "$CUR_PACKAGE" = "ctrl_sched" -o "$CUR_PACKAGE" = "ctrl_events" ] ; then
+            pretty_execute "scons --verbose opt=3 lib tests examples"
         else
-            pretty_execute "scons -j $PARALLEL opt=3 lib tests examples"
+            pretty_execute "scons --verbose -j $PARALLEL opt=3 lib tests examples"
         fi
         TESTING_RETVAL=$RETVAL
         FAILED_COUNT=`eval "find tests -name \"*.failed\" $SKIP_THESE_TESTS | wc -l"`
         if [ $FAILED_COUNT != 0 ]; then
             print_error "One or more required tests failed:"
             pretty_execute -anon 'find tests -name "*.failed"'
-            # cat .failed files to stdout
+            # Developers want log of failed-tests entered in build-fail email
             for FAILED_FILE in `find tests -name "*.failed"`; do
-                echo "================================================" 
-                echo "Failed unit test: $PWD/$FAILED_FILE" 
-                cat $FAILED_FILE
-                echo "================================================"
+                echo "================================================" &>>$BUILD_ROOT/$FAILED_TESTS_LOG
+                echo "Failed unit test: $PWD/$FAILED_FILE" &>> $BUILD_ROOT/$FAILED_TESTS_LOG
+                cat $FAILED_FILE&>> $BUILD_ROOT/$FAILED_TESTS_LOG
+                echo "================================================" &>> $BUILD_ROOT/$FAILED_TESTS_LOG
             done
+            # Developers want failed-test log entry to be highlighted in red
+            cat $BUILD_ROOT/$FAILED_TESTS_LOG > /proc/self/fd/2
             BUILD_STATUS=4
-            BUILD_ERROR="failure of 'scons -j $PARALLEL opt=3 lib tests examples' build ($BUILD_STATUS)."
+            BUILD_ERROR="Failure of 'scons -j $PARALLEL opt=3 lib tests examples' build ($BUILD_STATUS)."
             print_error $BUILD_ERROR
         elif [ $TESTING_RETVAL != 0 ]; then
             # Probably failed in examples since the tests didn't report failure
             BUILD_STATUS=5
-            BUILD_ERROR="failure of 'scons -j $PARALLEL opt=3 lib tests examples' build ($BUILD_STATUS)."
+            BUILD_ERROR="Failure of 'scons -j $PARALLEL opt=3 lib tests examples' build ($BUILD_STATUS)."
             print_error $BUILD_ERROR
         else   # Built libs & doc OK, ran executables OK, now eups-install
-            pretty_execute "scons  version=$CUR_VERSION+$BUILD_NUMBER opt=3 lib install current declare"
+            pretty_execute "scons --verbose version=$CUR_VERSION+$BUILD_NUMBER opt=3 lib install current declare"
             if [ $RETVAL != 0 ]; then
                 BUILD_STATUS=3
-                BUILD_ERROR="failure of install: 'scons  version=$CUR_VERSION+$BUILD_NUMBER opt=3 lib install current declare' build ($BUILD_STATUS)."
+                BUILD_ERROR="Failure of install: 'scons version=$CUR_VERSION+$BUILD_NUMBER opt=3 lib install current declare' build ($BUILD_STATUS)."
                 print_error $BUILD_ERROR
             else
                 print "Success of Compile/Load/Test/Install: $CUR_PACKAGE $CUR_VERSION"
@@ -286,30 +288,28 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
             fi
         fi
     else  # Built libs & doc OK, no tests wanted|available, now eups-install
-            pretty_execute "scons version=$CUR_VERSION+$BUILD_NUMBER opt=3 lib install current declare python"
+            pretty_execute "scons --verbose version=$CUR_VERSION+$BUILD_NUMBER opt=3 lib install current declare python"
             if [ $RETVAL != 0 ]; then
                 BUILD_STATUS=1
-                BUILD_ERROR="failure of install: 'scons version=$CUR_VERSION+$BUILD_NUMBER opt=3 lib install current declare python' build ($BUILD_STATUS)."
+                BUILD_ERROR="Failure of install: 'scons version=$CUR_VERSION+$BUILD_NUMBER opt=3 lib install current declare python' build ($BUILD_STATUS)."
                 print_error $BUILD_ERROR
-            fi
-            print "Success during Compile/Load/Install with-tests: $CUR_PACKAGE $CUR_VERSION"
-            eups declare -t SCM $CUR_PACKAGE $CUR_VERSION+$BUILD_NUMBER
-            if [ $? != 0 ]; then
-                print_error "WARNING: failure setting SCM tag on build product."
             else
-                print "Success of SCM tag on: $CUR_PACKAGE $CUR_VERSION"
+                print "Success during Compile/Load/Install without-tests: $CUR_PACKAGE $CUR_VERSION"
+                eups declare -t SCM $CUR_PACKAGE $CUR_VERSION+$BUILD_NUMBER
+                if [ $? != 0 ]; then
+                    print_error "WARNING: failure setting SCM tag on build product."
+                fi
             fi
     fi
 
-    print "BUILD_STATUS status after test failure search: $BUILD_STATUS"
+    print "BUILD_STATUS status after build/install: $BUILD_STATUS"
     # Archive log if explicitly requested on success and always on failure.
     if [ "$BUILD_STATUS" -ne "0" ]; then
         # preserve config log 
         LOG_FILE="config.log"
-        pretty_execute pwd
         if [ "$LOG_DEST" ]; then
             if [ -f "$LOG_FILE" ]; then
-                copy_log ${CUR_PACKAGE}_$CUR_VERSION/$LOG_FILE $LOG_FILE $LOG_DEST_HOST $LOG_DEST_DIR ${CUR_PACKAGE}/$CUR_VERSION $LOG_URL
+                copy_log $LOG_FILE $LOG_FILE $LOG_DEST_HOST $LOG_DEST_DIR $BUILDER_NAME'/build/'$BUILD_NUMBER'/steps/'$STEP_NAME'/logs' $LOG_URL
             else
                 print_error "WARNING: No $LOG_FILE present."
             fi
@@ -334,9 +334,15 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
         else
            SEND_TO="$BLAME_EMAIL, $PACKAGE_OWNERS"
         fi
-        #emailFailure "$STEP_NAME" "$SEND_TO" 
+        print_error "FAILURE: ============================================================="
+        print_error "FAILURE: Buildbot failed to build $PACKAGE due to an error building dependency: $CUR_PACKAGE."
+        print_error "FAILURE: Dependency: $CUR_PACKAGE (version: $CUR_VERSION)"
+        print_error "FAILURE: $BUILD_ERROR"
+        print_error "FAILURE: ============================================================="
         emailFailure "$CUR_PACKAGE" "$SEND_TO" 
         clear_blame_data
+
+        touch $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_FAIL
 
         #   Following only necessary if failed during scons-install step
         if [ "`eups list -s $CUR_PACKAGE $CUR_VERSION 2> /dev/null | grep $CUR_VERSION | wc -l`" != "0" ]; then
@@ -346,36 +352,43 @@ while read PACKAGE_DEPTH CUR_PACKAGE CUR_VERSION; do
             pretty_execute "eups undeclare -c $CUR_PACKAGE $CUR_VERSION"
         fi
         print_error "Exiting since $CUR_PACKAGE failed to build/install successfully"
-        echo touch $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_FAIL
-        touch $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_FAIL
 
-        if [ "$CUR_PACKAGE" != "$PACKAGE" ] ; then
-            exit 2
-        else
-            exit 1
+        if [ "$ONE_PASS_BUILD" = "1" ] ; then
+            # Rate Failure if (FullBuild & Package=CurPackage)
+            if [ "$PACKAGE" = "$CUR_PACKAGE" ] ; then
+                exit $BUILDBOT_FAILURE
+            else
+                exit $BUILDBOT_WARNINGS
+            fi
+        elif [ "$ON_CHANGE_BUILD" = "0" ]; then
+            # Rate Failure if (git-change & git-Package=CurPackage)
+            if [ "$GIT_PACKAGE" = "$CUR_PACKAGE" ] ; then
+                exit $BUILDBOT_FAILURE
+            else
+                exit $BUILDBOT_WARNINGS
+            fi
+        else # Not Full Build, not git-change build, ergo one-Pass_build
+            exit $BUILDBOT_FAILURE
         fi
     fi
 
-    # For production build, setup each successful install 
-    print "-------------------------"
-    # srp - jan 24 2012 -  use current version which is already installed.
-    setup -t current $CUR_PACKAGE
+    # For full build, setup each successful install 
+    setup -t current -j $CUR_PACKAGE
     if [ $? != 0 ]; then
         print_error "WARNING: unable to complete setup of installed $CUR_PACKAGE $CUR_VERSION. Continuing with package setup in local directory."
     fi
-    # srp - jan 24 2012 - use current version which is already installed.
+    print "eups list -s: after final dependent setup"
+    eups list -s 
+    print "-------------------------"
     eups list -t current -v $CUR_PACKAGE
     print "-------------------------"
-    echo touch $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_OK
     touch $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_OK
-    retval=$? 
-    if [ $retval == 0 ]; then
+    if [ $? == 0 ]; then
         rm -f $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/NEEDS_BUILD
         rm -f $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_FAIL
     else
         print_error "WARNING: unable to set flag: $WORK_PWD/git/$CUR_PACKAGE/$CUR_VERSION/BUILD_OK; this source directory will be rebuilt on next use." 
     fi
-    echo "EUPS_PATH is $EUPS_PATH"
     echo "Finished working with $CUR_PACKAGE $CUR_VERSION"
 
 # -------------------------------------------------
@@ -388,4 +401,4 @@ if [ $DO_TESTS = 0 ]; then
 else
     print "Successfully built, but not tested, $PACKAGE"
 fi
-exit 0
+exit $BUILDBOT_SUCCESS

@@ -8,7 +8,7 @@ import os, sys
 
 class PackageList:
 
-    def __init__(self,**kwargs):
+    def __init__(self,excludeFile):
         ##
         # current_list is the URL of the manifest for all git repositories.
         #
@@ -39,7 +39,8 @@ class PackageList:
 
         
         # read in a list of packages we know are excluded.
-        excluded_internal_list = "/lsst/home/buildbot/RHEL6/etc/excluded.txt"
+        #excluded_internal_list = "/lsst/home/buildbot/RHEL6/gitwork/etc/excluded.txt"
+        excluded_internal_list = excludeFile
         stream = open(excluded_internal_list,"r")
         excluded_internal_pkgs = stream.read().split()
         stream.close()
@@ -55,24 +56,46 @@ class PackageList:
         return self.pkg_list
 
 #========================================================================
-if len(sys.argv) < 2:
-    sys.stderr.write("Usage: %s <git-branch>" % (sys.argv[0]))
+if len(sys.argv) < 3:
+    sys.stderr.write("FATAL: Usage: %s <git-branch> <excluded git repos file>" % (sys.argv[0]))
     sys.exit(1)
 
 gitBranch = sys.argv[1]    
 
+#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+#      JUST WHERE IS THE ERROR CHECKING ON THIS INPUT PARAMETER????
+excludedGitRepositories = sys.argv[2]
+#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+
+
 ##
 # open each of the packages at the distribution stack URL, look up the hash
-# tag for <branch>, and output the package name and hash tag to STDOUT
+# tag for <branch>, and output the package name and hash tag to STDOUT;
+# if <branch>'s hash tag is not found, look up the hash tag for 'master', 
+# and output the package name and hash tag to STDOUT.
 #
-p = PackageList()
+p = PackageList(excludedGitRepositories)
 ps = p.getPackageList()
 for pkg in ps:
     gitURL = "git@git.lsstcorp.org:LSST/DMS/"+pkg+".git"
     try:
-        stream=os.popen("git ls-remote --refs -h "+ gitURL +" | grep refs/heads/"+ gitBranch +" | awk '{print $1}'")
+        # Does named  <branch> exist?
+        stream=os.popen("git ls-remote --refs -h "+ gitURL +" | grep refs/heads/"+ gitBranch +"$ | awk '{print $1}'")
         hashTag = stream.read()
-        print pkg+" "+hashTag.strip()
+        strippedHashTag = hashTag.strip()
+        fromBranch = gitBranch
+        # If not, then fetch from 'master'?
+        if not strippedHashTag:
+            stream=os.popen("git ls-remote --refs -h "+ gitURL +" | grep refs/heads/master | awk '{print $1}'")
+            hashTag = stream.read()
+            strippedHashTag = hashTag.strip()
+            fromBranch = "master"
+
+        if strippedHashTag:
+            print pkg+" "+strippedHashTag+" "+fromBranch
+        else:
+            sys.stderr.write('FAILURE: Failed to find git hash code for: %s\n' % pkg)
     except IOError:
+        sys.stderr.write('FAILURE: IOError whilst acquiring git hash code for: %s\n' % pkg)
         pass
 

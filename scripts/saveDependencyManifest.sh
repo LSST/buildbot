@@ -1,39 +1,38 @@
 #!/bin/bash
 
-# this script checks to see all the dependencies for a given package are
-# marked with a BUILD_OK, and if they are, will create a manifest file of
+# this script creates a dependency-ordered manifest file of
 # packages eups-tagged with "SCM" which flag a successful package build.
 # This is meant to be run from the builds/work directory.
 
 # arguments
 # --package : package we're looking at for to see if dependencies are built
-# --script_dir : location of the buildbot scripts. used to invoke other scripts
 # --builder_name : name of this buildbot build e.g. Trunk_vs_Trunk
 # --build_number : number assigned to this particular build
 #
+source ${0%/*}/gitConstants.sh
+
 DEBUG=""
 PACKAGE=""
-SCRIPT_DIR=""
 BUILDER_NAME=""
 BUILD_NUMBER=""
 
 LAST_SUCCESSFUL_MANIFEST="lastSuccessfulBuildManifest.list"
+MANIFEST="manifest.list"
 
 ##
 # get the arguments
 ##
-options=$(getopt -l debug,package:,script_dir:,builder_name:,build_number: -- "$@")
+options=$(getopt -l debug,package:,builder_name:,build_number: -- "$@")
 
 while true
 do
         case $1 in
             --debug) DEBUG=1; shift 1;;
-            --package) PACKAGE=$2; shift 2;;
-            --script_dir) SCRIPT_DIR=$2; shift 2;;
             --builder_name) BUILDER_NAME=$2; shift 2;;
             --build_number) BUILD_NUMBER=$2; shift 2;;
+            --package) PACKAGE=$2; shift 2;;
 
-            *) echo "parsed options; arguments left are: $*"
+            *) [ "$*" != "" ] && echo "parsed options; arguments left are:$*:"
                 break;;
         esac
 done
@@ -41,9 +40,9 @@ done
 ##
 # sanity check to be sure we got all the arguments
 ##
-if [ "$PACKAGE" == "" ] || [ "$SCRIPT_DIR" == "" ] || [ "$BUILDER_NAME" == "" ]  || [ "$BUILD_NUMBER" == "" ]; then
-    echo "usage: $0 --package <package> --scriptdir <dir> --builder_name <name> --build_number <#>"
-    exit 1
+if [ "$PACKAGE" == "" ] ; then
+    echo "FAILED: Usage: $0 --package <package> [debug] [--builder_name <name>] [--build_number <#>]"
+    exit $BUILDBOT_FAILURE
 fi
 
 #
@@ -52,9 +51,9 @@ fi
 source $LSST_HOME/loadLSST.sh
 
 ##
-# grab the version of $PACKAGE from the manifest.list file
+# grab the version of $PACKAGE from the MANIFEST file
 ##
-VERSION=`grep -w $PACKAGE manifest.list | awk '{ print $2 }'`
+VERSION=`grep -w $PACKAGE $MANIFEST | awk '{ print $2 }'`
 
 if [ "$DEBUG" != "" ]; then
     echo ls git/$PACKAGE/$VERSION
@@ -66,35 +65,33 @@ fi
 ##
 INTERNAL=git/$PACKAGE/$VERSION/internal.deps
 if [ ! -f "$INTERNAL" ]; then
-    echo "error: Can't find $INTERNAL. Exiting."
-    exit 1
+    echo "FATAL: Can't find \"$INTERNAL\". Exiting."
+    exit $BUILDBOT_FAILURE
 fi
 
 EXTERNAL=git/$PACKAGE/$VERSION/external.deps
 if [ ! -f "$EXTERNAL" ]; then
-    echo "error: Can't find $EXTERNAL. Exiting."
-    exit 1
+    echo "FATAL:: Can't find \"$EXTERNAL\". Exiting."
+    exit $BUILDBOT_FAILURE
 fi
 
 DO_NOT_CONTINUE=0
 while read LINE; do
     set $LINE
     if [ "$DEBUG" != "" ]; then
-        echo setup $2 $3
-        echo "Declare $2 $3"
-        echo "checking git/$2/$3/BUILD_OK"
+        echo "checking git/$1/$2/BUILD_OK"
     fi
-    if [ ! -f "git/$2/$3/BUILD_OK" ]; then
-        echo "error: Package $2 $3 not built."
+    if [ ! -f "git/$1/$2/BUILD_OK" ]; then
+        echo "FATAL: Package \"$1 $2\" not built."
         DO_NOT_CONTINUE=1
     fi
 done < $INTERNAL
 
 if [ "$DO_NOT_CONTINUE" != "0" ]; then
-    echo "Can not continue.  Exiting."
-    exit 1
+    exit $BUILDBOT_FAILURE
 fi
-echo "PWD: `pwd`"
+
+echo "/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/"
 eups list
 echo "/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/"
 eups list -t SCM
@@ -102,20 +99,16 @@ echo "/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/"
 
 rm -f tmp$LAST_SUCCESSFUL_MANIFEST
 eups list -t SCM > tmp$LAST_SUCCESSFUL_MANIFEST
-echo "/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/"
-echo "Contents of tmp$LAST_SUCCESSFUL_MANIFEST"
-cat tmp$LAST_SUCCESSFUL_MANIFEST
-echo "/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/"
 if [ "`cat tmp$LAST_SUCCESSFUL_MANIFEST | wc -l`" = 0 ]; then
-    echo "Failed to build specific manifest list for archival.  Exiting."
-    exit 1
+    echo "FATAL: Failed to build specific \"$MANIFEST\" for archival."
+    exit $BUILDBOT_FAILURE
 fi
 
 cp tmp$LAST_SUCCESSFUL_MANIFEST $LAST_SUCCESSFUL_MANIFEST
 cat $EXTERNAL >> $LAST_SUCCESSFUL_MANIFEST
 
-echo "$LAST_SUCCESSFUL_MANIFEST for package: $PACKAGE"
+echo "INFO: \"$LAST_SUCCESSFUL_MANIFEST\" for package: \"$PACKAGE\""
 cat $LAST_SUCCESSFUL_MANIFEST
 
-exit 0
+exit $BUILDBOT_SUCCESS
 
