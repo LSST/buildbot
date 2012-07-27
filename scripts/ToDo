@@ -49,11 +49,17 @@ Winter 2012 Milestones for Buildbot Scripts
 
 * Task: Check package's ABI against its previous version
   * if changed, rebuild all packages depending on the just-tagged package.
-    * use an ABI checker such as  
-      http://ispras.linux-foundation.org/index.php/ABI_compliance_checker and,
-    * Status: TBD; currently implemented to determine the set of all packages
-                   depending on a given package and rebuild all those. Also,
-                   the ABI checker at URL above doesn't exist.
+    * Rebuild algorithm is currently implemented such that if a package 
+      changes: determine the set of all packages depending on that given 
+      package and then rebuild all those.  As per K-T:  "any change in any 
+      package, regardless of binary compatibility or incompatibility, 
+      results in rebuilds/rereleases of the rest of the stack above it".
+    * Status: Done
+  * Use of an ABI checker, such as  Linux Foundation LSB Program: 
+      abi-compliance-checker, was suggested
+      * in ~buildbot/abi-testing/manifests_check/ there are scripts exercising
+        abi-compliance-checker on DM manifests
+      * Status: unnecessary as per K-T above
 
 
 ========================================================================

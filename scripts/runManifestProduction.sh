@@ -86,7 +86,9 @@ done
 
 
 if [ "$CCD_COUNT" -le 0 ]; then
+    echo "FAILURE: -----------------------------------------------------------"
     usage
+    echo "FAILURE: -----------------------------------------------------------"
     exit $BUILDBOT_FAILURE
 fi
 
@@ -107,52 +109,37 @@ echo "MANIFEST: $MANIFEST"
 echo "Current `umask -p`"
 #*************************************************************************
 
-#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
-# May need to revise this section if/when testing_endtoend transitions to BETA
-# to select one vs the other based on $USE_BETA.
-#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
-
 WORK_DIR=`pwd`
-for PACKAGE in testing_endtoend; do
-    [[ "$DEBUG" ]] && echo "/\/\/\/\/\/\/\/\/\ Extracting package: $PACKAGE /\/\/\/\/\/\/\/\/"
-    [[ "$DEBUG" ]] && echo ""
-
-    # SCM checkout ** from master **
-    prepareSCMDirectory $PACKAGE master BUILD
-    if [ $RETVAL != 0 ]; then
-        echo "Failed to extract $PACKAGE source directory during setup for runDrp.sh use."
-        exit $BUILDBOT_FAILURE
-    fi
-
-    # setup all dependencies required by $PACKAGE
-    cd $SCM_LOCAL_DIR
-    [[ "$DEBUG" ]] && echo ""
-    [[ "$DEBUG" ]] && echo "/\/\/\/\/\/\/\/\/\ Prior to $PACKAGE setup /\/\/\/\/\/\/\/"
-    eups list -s
-    setup -r .
-    [[ "$DEBUG" ]] && echo ""
-    [[ "$DEBUG" ]] && echo "/\/\/\/\/\/\/\/\/\ After $PACKAGE setup /\/\/\/\/\/\/\/"
-    eups list -s
-    cd $WORK_DIR
-done
-
-#1 Feb 12# # Replacing with manifest list installation
-#1 Feb 12# # setup the production run packages
-#1 Feb 12# if [ $USE_BETA ]; then
-#1 Feb 12#     setup --tag=beta --tag=current --tag=stable datarel
-#1 Feb 12#     setup -r $ASTROMETRY_NET_DATA_DIR/$ASTRO_NET_DATA_VERSION astrometry_net_data 
-#1 Feb 12# else
-#1 Feb 12#     setup --tag=current --tag=stable datarel
-#1 Feb 12#     setup -r $ASTROMETRY_NET_DATA_DIR/$ASTRO_NET_DATA_VERSION astrometry_net_data  
-#1 Feb 12# fi
-
 
 ##
 # ensure full dependencies file is available
 ##
 if [ ! -e $MANIFEST ] || [ "`cat $MANIFEST | wc -l`" = "0" ]; then
+    echo "FAILURE: -----------------------------------------------------------"
     echo "Failed to find file: $MANIFEST, in buildbot work directory."
+    echo "FAILURE: -----------------------------------------------------------"
     exit $BUILDBOT_FAILURE
+fi
+
+# Block for current release circa 20120725 which doesn't have pipe_tasks
+if [ "`grep pipe_tasks $MANIFEST`" = "" ]; then
+    echo "WARNING: -----------------------------------------------------------"
+    echo "No pipe_tasks package in: $MANIFEST; not running drpRun ."
+    echo "WARNING: -----------------------------------------------------------"
+    exit $BUILDBOT_WARNINGS
+fi
+
+# Block is for ctrl_orca which fails in stacks for v5_2 & release/Summer2012
+if [ "$BUILDER_NAME" = "v5_2_Run_Rh6_Gcc" ]  || \
+   [ "$BUILDER_NAME" = "v5_2_Run_Rh6_Clg" ] || \
+   [ "$BUILDER_NAME" = "Git_releases_Summer2012_Run_Rh6_Gcc" ] || \
+   [ "$BUILDER_NAME" = "Git_releases_Summer2012_Run_Rh6_Clg" ] || \
+   [ "$BUILDER_NAME" = "releases_Summer2012_Run_Rh6_Gcc" ] || \
+   [ "$BUILDER_NAME" = "releases_Summer2012_Run_Rh6_Clg" ] ; then
+    echo "WARNING: -----------------------------------------------------------"
+    echo "Not running drpRun for v5_2 nor releases/Summer2012  builds til testing_endtoend updated for those manifests. 24 Jul 2012"
+    echo "WARNING: -----------------------------------------------------------"
+    exit $BUILDBOT_WARNINGS
 fi
 
 # Setup the entire build environment for a production run
@@ -162,18 +149,13 @@ while read LINE; do
     setup -j $1 $2
 done < $MANIFEST
 
-echo " ----------------------------------------------------------------"
-eups list -s
-echo "-----------------------------------------------------------------"
-
-
 # Explicitly setup the astro data requested
 setup -j -r $ASTROMETRY_NET_DATA_DIR/$ASTRO_NET_DATA_VERSION astrometry_net_data 
 
 echo ""
-echo "/\/\/\/\/\/\/\/\/\ After  datarel setup /\/\/\/\/\/\/\/\/"
+echo " ----------------------------------------------------------------"
 eups list  -s
-eups list astrometry_net_data
+echo "-----------------------------------------------------------------"
 echo ""
 echo "Current `umask -p`"
 
@@ -185,8 +167,12 @@ cd $TESTING_ENDTOEND_DIR
 #echo "Exiting $0 after detaching drpRun process and reassigning I/O streams to log: $WORK_DIR/setup/build$BUILD_NUMBER/drpRun.log ."
 
 
-echo "**NOT DOING until slave on lsst6/9**: $TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT "
-exit $BUILDBOT_WARNINGS
+if [ "`uname -n`" != "lsst9.ncsa.illinois.edu" ] ; then
+    echo "FAILURE: -----------------------------------------------------------"
+    echo "FAILURE: Not testing production run  until drpRun slave on lsst9**"
+    echo "FAILURE: -----------------------------------------------------------"
+    exit $BUILDBOT_WARNINGS
+fi
 
 
 echo "$TESTING_ENDTOEND_DIR/bin/drpRun.py --ccdCount $CCD_COUNT -m $BUCK_STOPS_HERE --testOnly"

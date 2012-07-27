@@ -116,7 +116,7 @@ emailFailure() {
     local emailPackage=$1; shift
     local emailRecipients=$*;
 
-    print "emailPackage: $emailPackage, STEP_NAME: $STEP_NAME SCM_PACKAGE: $SCM_PACKAGE ON_CHANGE_BUILD: $ON_CHANGE_BUILD"
+    print "emailPackage: $emailPackage, STEP_NAME: $STEP_NAME SCM_PACKAGE: $SCM_PACKAGE ON_CHANGE_BUILD: $ON_CHANGE_BUILD Desired_Email_Recipients: $emailRecipients"
     local localPackage="$PACKAGE"
     if [ "$ON_CHANGE_BUILD" = "0" ] ; then
         localPackage="$SCM_PACKAGE"
@@ -134,6 +134,8 @@ emailFailure() {
     #/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
     # raa 11 Mar 2012        F O R     D E B U G
     if [ "$ON_CHANGE_BUILD" = "0" ]; then
+        print_error "For on-change build: replacing proposed recipients with $BUCK_STOPS_HERE"
+        print_error "original emailRecipients: $emailRecipients "
         MAIL_TO="$BUCK_STOPS_HERE"
     else
         MAIL_TO="$emailRecipients"
@@ -151,7 +153,7 @@ emailFailure() {
     printf "\
 from: \"Buildbot\" <$BUCK_STOPS_HERE>\n\
 subject: $EMAIL_SUBJECT\n\
-to: \"Godzilla\" <robyn@noao.edu>\n \
+to: $MAIL_TO\n\
 cc: \"Buildbot\" <$BUCK_STOPS_HERE>\n\n" \
 >> email_body.txt
 # REPLACE 'TO:' ABOVE " to: $MAIL_TO\n"               & add trailing slash

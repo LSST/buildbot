@@ -35,7 +35,7 @@ DEBUG=debug
 usage() {
 #80 cols  ................................................................................
     echo "Usage: $0 [options] package"
-    echo "Initiate requested production code then detach control."
+    echo "Initiate the drpRun production validation code."
     echo
     echo "Options:"
     echo "                --verbose: print out extra debugging info"

@@ -94,7 +94,7 @@ while read LINE; do
     echo "setupRequired($1 $2)"  >>StackTop/ups/StackTop.table
 done < $MANIFEST
 eups declare -r StackTop StackTop stackTopDeps
-setup -j  StackTop stackTopDeps
+setup -k  StackTop stackTopDeps
 
 # Determine the topo dependency tree to use as build sequence of all packages
 eups list --raw -s -D --topo StackTop > $ALL_PKG_BUILD_ORDER_MANIFEST.rawTopo
