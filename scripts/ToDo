@@ -8,7 +8,20 @@ BugList
   import. Then that new code segment is never installed into git.
   Currently  Passwords are masked when installed in git repository.
 
-BuildBot Implementation Specifics
+* Developers have issued ticket (#2322) to get log error details output into email.
+  (~ 10 Sep 2012)
+
+* Developers have issued ticket #2327 to have the 'runDemo' log show how to 
+  reproduce problem
+  (~ 10 Sep 2012)
+
+* Developers have asked (#2332) for a 32 bit build and compilation with 
+  _GLIBCXX_DEBUG and unit test run under valgrind
+  (~ 10 Sep 2012)
+
+
+
+BuildBot Implementation Upgrades
 * Determine what build products, logs, etc should be archived or deleted,
   then implement. Remove: doxy's /tmp files, >1 month doxydocs, ..
   (13 Jan 12: TBD)
@@ -16,7 +29,6 @@ BuildBot Implementation Specifics
 * Trigger Package Build on entry of package name should allow previously 
   unknown git package name to be built.  
   (13 Jan 12:  TBD)
-
 
 * email handling
   * determining the guru recipients via either
@@ -32,10 +44,21 @@ BuildBot Implementation Specifics
   (10 May 2012)
 
 * need new slave to automatically rebuild clang's LSST_HOME stack routinely
-  (23 Apr 2012)
+  (10 Oct 2012: clang stack is being synced from cluster gcc stack nightly 
+  but the stack is not used by the routine clang builds - this requires a
+  lock to prevent the two parties from initiating any left-field operation 
+  which might alter the stacks-in-transition)
+  (still TBD: 23 Apr 2012)
 
-* implement a web-for-based user-initiated drpRun using their own manifest.
+* implement a web-based user-initiated drpRun using their own manifest.
   (20 apr 2012: need next buildbot's release which has much better form edits))
+
+* implement a new slave which routinely checks if the 3rd party packages have 
+  changed  and if so, send email that the stacks may need rebuild.  Note that
+  scons doesn't force a rebuild if any thirdparty_core tools change.
+  (10 Oct 2012)
+
+
 
 Winter 2012 Milestones for Buildbot Scripts 
   Extracted: http://dev.lsstcorp.org/trac/wiki/Winter2012/DevelToolRequirements
@@ -60,7 +83,6 @@ Winter 2012 Milestones for Buildbot Scripts
       * in ~buildbot/abi-testing/manifests_check/ there are scripts exercising
         abi-compliance-checker on DM manifests
       * Status: unnecessary as per K-T above
-
 
 ========================================================================
 ========================================================================

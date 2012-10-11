@@ -49,7 +49,7 @@ if [ "$TAG" = "stable" ] ; then
     #---------------------------------------------------------------------
     # Following is External Users' method of installing stack
     #---------------------------------------------------------------------
-    curl -o newinstall.sh http://dev.lsstcorp.org/pkgs/std/w12/newinstall.sh
+    curl -o newinstall.sh http://$SW_SERVER/newinstall.sh
     if [ ! -f newinstall.sh ]; then
         echo "Failed to fetch newinstall.sh"
         exit $BUILDBOT_FAILURE
@@ -94,7 +94,7 @@ if [ "x`diff unsortedEups.list sortedUniqEups.list`" != "x" ]; then
    echo "FAILURE: Inconsistent stack using multi-version package(s): "
    echo "$package"
    echo "================================================================="
-   exit $BUILDBOT_FAILURE
+   exit $BUILDBOT_WARNINGS
 fi
 
 # -- Save stack contents into file named by MANIFEST input param
@@ -115,5 +115,5 @@ elif [ $PYTHON_INSTALLED = "0" ]; then
 fi
 echo "FAILURE: Unexpected: found more than one python installed:";
 eups list  python
-exit $BUILDBOT_FAILURE
+exit $BUILDBOT_WARNINGS
 

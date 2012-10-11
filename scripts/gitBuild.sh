@@ -2,12 +2,8 @@
 # install a requested package from version control, and recursively
 # ensure that its minimal dependencies are installed likewise
 
-DEV_SERVER="lsstdev.ncsa.uiuc.edu"
-SCM_SERVER="git.lsstcorp.org"
-WEB_ROOT="/var/www/html/doxygen"
 
 FAILED_TESTS_LOG="FailedTests.log"
-
 BUILD_FAILURE_BLAME="BlameNotification.list"
 
 #Exclude known persistent test failures until they are fixed or removed
@@ -21,6 +17,7 @@ source ${0%/*}/gitConstants.sh
 source ${0%/*}/build_functions.sh
 source ${0%/*}/gitBuildFunctions.sh
 source ${0%/*}/gitBuildFunctions2.sh
+unset PRINT_ERROR
 
 # -------------------
 # -- get arguments --

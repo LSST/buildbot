@@ -68,7 +68,6 @@ check1() {
 source ${0%/*}/gitBuildFunctions.sh
 
 DEBUG=debug
-DEV_SERVER="lsstdev.ncsa.uiuc.edu"
 WEB_HOST="lsst-build.ncsa.illinois.edu"
 WEB_ROOT="/usr/local/home/buildbot/www/"
 

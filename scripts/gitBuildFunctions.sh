@@ -136,15 +136,35 @@ package_is_special() {
     # 24 May 2012 added obs_subaru bypass
     # 4 June 2012 added sdqa (old)
     # 4 June 2012 added afw_extensions_rgb analysis meas_deblender (too new)
+    # 6 Sep  2012 added obs_sst - never to be DM used accding Paul Price
+    # 21 Sep 2012 added ctrl_execute, ctrl_platform_lsst, ctrl_platform_gordon
+    #                   as too new per SRP
+    # 10 Oct 2012 added obs_decam & scipy
 
 #/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
 # N O T E: 
 # If you change this, remember to change: buildmaster/templates/layout.html
-#                                and possibly, RHEL6/etc/excluded.txt
+#                                and possibly, RHEL6/etc/excluded*.txt
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
 ##        -o ${SPCL_PACKAGE:0:16}  = "meas_extensions_"  
 # Not all are git $LSST_DMS/<package>.git
+    if [ "$CC" = "clang" -a \
+        \( ${SPCL_PACKAGE}            = "ctrl_events"  \
+        -o  ${SPCL_PACKAGE}         = "ctrl_sched"  \
+        -o  ${SPCL_PACKAGE}         = "ctrl_orca"  \
+        -o  ${SPCL_PACKAGE}         = "pex_harness"  \
+        -o  ${SPCL_PACKAGE}         = "testing_endtoend"  \
+        -o  ${SPCL_PACKAGE}         = "datarel"  \) \
+        ]; then
+        return 0
+    fi
+
     if [ ${SPCL_PACKAGE}         = "coadd_pipeline"  \
+        -o ${SPCL_PACKAGE}       = "obs_decam"  \
+        -o ${SPCL_PACKAGE}       = "scipy"  \
+        -o ${SPCL_PACKAGE}       = "ctrl_execute"  \
+        -o ${SPCL_PACKAGE}       = "ctrl_platform_lsst"  \
+        -o ${SPCL_PACKAGE}       = "ctrl_platform_gordon"  \
         -o ${SPCL_PACKAGE}       = "afw_extensions_rgb"  \
         -o ${SPCL_PACKAGE}       = "analysis"  \
         -o ${SPCL_PACKAGE}       = "meas_deblender"  \
@@ -154,6 +174,7 @@ package_is_special() {
         -o ${SPCL_PACKAGE:0:5}   = "mops_"  \
         -o ${SPCL_PACKAGE}       = "obs_cfht"  \
         -o ${SPCL_PACKAGE}       = "obs_subaru"  \
+        -o ${SPCL_PACKAGE}       = "obs_sst"  \
         -o ${SPCL_PACKAGE}       = "sdqa"  \
         -o ${SPCL_PACKAGE}       = "auton"  \
         -o ${SPCL_PACKAGE:0:6}   = "condor"  \
@@ -447,7 +468,7 @@ prepareSCMDirectory() {
     
     if [ -e $SCM_PKG_VER_DIR ] ; then
         cd $SCM_PKG_VER_DIR
-        # To guard against:  existing branch != requested branch -> NEEDS_Build
+        # To guard against:  existing branch != requested branch -> NEEDS_BUILD
         print "Local directory: $SCM_PKG_VER_DIR exists, ensure correct branch: $BRANCH"
         git checkout $GIT_BRANCH 1> clone.stdout 2> clone.stderr
         if [ $? != 0 ] ; then
@@ -467,7 +488,7 @@ prepareSCMDirectory() {
                 print_error "WARNING: $SCM_PACKAGE does not have branch: $GIT_BRANCH, using branch: master, instead."
             fi
         # git checkout of branch ok, now check if new use of that branch,
-        #     if so, then -> set needs_build and remove build_ok
+        #     if so, then -> set NEEDS_BUILD and remove BUILD_OK
         #     if existing use of directory, no change in flag status
         elif [ "`cat clone.stderr | head -1 | awk '{ print $1 }'`" = "Switched" ]; then
             touch $SCM_PKG_VER_DIR/NEEDS_BUILD
