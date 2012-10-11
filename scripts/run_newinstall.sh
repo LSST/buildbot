@@ -4,7 +4,7 @@ source ${0%/*}/gitConstants.sh
 
 #curl -o newinstall.sh http://dev.lsstcorp.org/tstdms/newinstall.sh
 #curl -o newinstall.sh http://lsstdev.ncsa.uiuc.edu/dmspkgs/newinstall.sh
-curl -o newinstall.sh http://dev.lsstcorp.org/pkgs/std/w12/newinstall.sh
+curl -o newinstall.sh http://sw.lsstcorp.org/newinstall.sh
 if [ ! -f newinstall.sh ]; then
     echo "Failed to fetch newinstall.sh"
     exit $BUILDBOT_FAILURE

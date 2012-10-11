@@ -38,8 +38,8 @@ class PackageList:
         stream.close()
 
         
-        # read in a list of packages we know are excluded.
-        #excluded_internal_list = "/lsst/home/buildbot/RHEL6/gitwork/etc/excluded.txt"
+        # read in a list of git packages we know are excluded.
+        #excluded_internal_list = "/lsst/home/buildbot/RHEL6/gitwork/etc/excludedGit_<lang>.txt"
         excluded_internal_list = excludeFile
         stream = open(excluded_internal_list,"r")
         excluded_internal_pkgs = stream.read().split()

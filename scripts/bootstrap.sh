@@ -24,14 +24,16 @@ BUILDER_NAME=""
 BUILD_NUMBER=""
 BRANCH=""
 EXCLUDED_REPOS=""
+EXCLUDED_PKGS=""
 
-options=$(getopt -l debug,excluded:,branch:,builder_name:,build_number: -- "$@")
+options=$(getopt -l debug,excluded_git:,excluded_eups:,branch:,builder_name:,build_number: -- "$@")
 
 while true
 do
     case $1 in
         --debug) DEBUG=1; shift 1;;
-        --excluded) EXCLUDED_REPOS=$2; shift 2;;
+        --excluded_git) EXCLUDED_REPOS=$2; shift 2;;
+        --excluded_eups) EXCLUDED_PKGS=$2; shift 2;;
         --builder_name) BUILDER_NAME=$2; shift 2;;
         --build_number) BUILD_NUMBER=$2; shift 2;;
         --branch) BRANCH=$2; shift 2;;
@@ -45,8 +47,8 @@ done
 ##
 # sanity check to be sure we got all the arguments
 ##
-if [ "$BRANCH" == "" ] || [ "$BUILDER_NAME" == "" ]  || [ "$BUILD_NUMBER" == "" ] || [ "$EXCLUDED_REPOS" == "" ]; then
-    echo "FATAL: Usage: $0 --excluded <file of excluded git repos> --branch <branch> [--debug] --builder_name <name> --build_number <#>"
+if [ "$BRANCH" == "" ] || [ "$BUILDER_NAME" == "" ]  || [ "$BUILD_NUMBER" == "" ] || [ "$EXCLUDED_REPOS" == "" ] || [ "$EXCLUDED_PKGS" == "" ]; then
+    echo "FATAL: Usage: $0 --excluded_git <file of excluded git repos> --excluded_eups >file of excluded eups packages> --branch <branch> [--debug] --builder_name <name> --build_number <#>"
     exit $BUILDBOT_FAILURE
 fi
 
@@ -62,7 +64,10 @@ echo "manifest.list"
 echo "==============================================================="
 cat manifest.list
 
-${0%/*}/released.py $BRANCH >released.list
+${0%/*}/released.py $BRANCH $EXCLUDED_PKGS >released.list
+if [ $? != 0 ]; then
+    exit $BUILDBOT_FAILURE
+fi
 cat released.list | awk '{print $1}' | sort >released.sorted
 echo "==============================================================="
 echo "released.list"

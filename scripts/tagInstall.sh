@@ -11,8 +11,7 @@ source ${0%/*}/gitConstants.sh
 
 SHELL=/bin/bash
 LSST_HOME=$PWD
-export EUPS_PKGROOT=http://dev.lsstcorp.org/pkgs/std/w12
-export SVNROOT=svn+ssh://svn.lsstcorp.org
+export EUPS_PKGROOT=http://$SW_SERVER
 owneups=
 httpget=
 
@@ -120,7 +119,8 @@ eups list
 
 echo "Installing 'lsst'"
 # install the essential stuff
-eups distrib install -C -t $TAG lsst || {
+# RAA 20121009# eups distrib install -C -t $TAG lsst || {
+eups distrib install -C lsst || {
     echo "Failed to install infrastructure packages"
     exit $BUILDBOT_FAILURE
 }

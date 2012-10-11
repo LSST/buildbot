@@ -26,6 +26,7 @@ print() {
 #---------------------------------------------------------------------------
 # print to stderr -  Assumes stderr is filedescriptor 2.
 print_error() {
+    # printf $@ > /proc/self/fd/2
     print $@ > /proc/self/fd/2
 }
 

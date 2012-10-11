@@ -39,9 +39,11 @@
         - <a href="{{ path_to_root }}json/help">JSON API</a>
         - <a href="{{ path_to_root }}about">About</a>
         <br> <br>
-        <b> Packages skipped until developer's build approval:</b> &nbsp;&nbsp;&nbsp; afw_extensions_rgb &nbsp;&nbsp;&nbsp; analysis &nbsp;&nbsp;&nbsp; meas_deblender &nbsp;&nbsp;&nbsp; meas_multifit &nbsp;&nbsp;&nbsp; mops_* &nbsp;&nbsp;&nbsp; obs_cfht  &nbsp;&nbsp;&nbsp; obs_subaru 
+        <b> Packages skipped until developer's build approval:</b> &nbsp;&nbsp;&nbsp; afw_extensions_rgb &nbsp;&nbsp;&nbsp; analysis &nbsp;&nbsp;&nbsp; meas_deblender &nbsp;&nbsp;&nbsp; meas_multifit &nbsp;&nbsp;&nbsp; mops_* &nbsp;&nbsp;&nbsp; obs_cfht  &nbsp;&nbsp;&nbsp; obs_subaru   &nbsp;&nbsp;&nbsp; ctrl_execute  &nbsp;&nbsp;&nbsp; ctrl_platform_*  &nbsp;&nbsp;&nbsp; scipy  &nbsp;&nbsp;&nbsp; obs_decam
         <br> 
-        <b> Notice 24 Jul 2012: ctrl_orca 5.2.2.0+1 breaks drpRun; not executed in eups-tag: v5_2 nor git-branch: releases/Summer2012 til testing_endtoend updated.
+        <b> Notice 1 Sep 2012: activemqcpp  breaks clang version of ctrl_events; clang stacks' drpRun switched to demo2012 run.
+        <br>
+        <b> Notice 12 Sep 2012: new release of ctrl_orca  breaks drpRun; non-tag stacks validating with drpRun switched to demo2012 run; tag stacks too old for demo2012.
     </div>
     {% endblock %}
 

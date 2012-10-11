@@ -51,9 +51,6 @@ source ${0%/*}/gitConstants.sh
 source ${0%/*}/build_functions.sh
 source ${0%/*}/gitBuildFunctions.sh
 
-DEV_SERVER="lsstdev.ncsa.uiuc.edu"
-WEB_HOST="lsst-build.ncsa.illinois.edu"
-WEB_ROOT="/usr/local/home/buildbot/www/"
 
 # -------------------
 # -- get arguments --

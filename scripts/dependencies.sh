@@ -15,13 +15,6 @@
 # <tags> :  blank separated tags list used to extract prefered package versions 
 
 
-
-#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
-#      TBD:  Better add some more error checking in the conditionals
-#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
-
-
-
 source ${0%/*}/gitConstants.sh
 
 # -------------------
@@ -33,7 +26,6 @@ BUILD_NUMBER=""
 BRANCH=""
 
 MANIFEST="manifest.list"
-SOURCE_MANIFEST_SETUP="./SOURCE_MANIFEST_SETUP"
 DM_PKG_BUILD_ORDER_MANIFEST="DmPkgBuildOrderManifest"
 ALL_PKG_BUILD_ORDER_MANIFEST="AllPkgBuildOrderManifest"
 
@@ -63,23 +55,6 @@ if [ ! -e $MANIFEST ] || [ "`cat $MANIFEST | wc -l`" = "0" ]; then
     exit $BUILDBOT_FAILURE
 fi
 
-# create MANIFEST source file to setup each package
-cat $MANIFEST | sed -e "s/^/setup -j /" > $SOURCE_MANIFEST_SETUP
-source $SOURCE_MANIFEST_SETUP
-setup -k -t beta -t stable datarel
-setup -k -t beta -t stable testing_endtoend
-setup -k -t beta -t stable testing_pipeQA
-
-#setup -t S12a -t beta -t stable `grep -w testing_endtoend $MANIFEST | awk '{print $1,$2}'`
-#setup -t S12a -t beta -t stable `grep -w testing_pipeQA $MANIFEST | awk '{print $1,$2}'`
-#setup -t S12a -t beta -t stable `grep -w datarel $MANIFEST | awk '{print $1,$2}'`
-echo "----------------------------------------"
-eups list datarel -s
-eups list testing_endtoend -s
-eups list testing_pipeQA -s
-echo "----------------------------------------"
-eups list -s
-echo "----------------------------------------"
 
 # Setup a package containing all git-packages in order to 
 # build a one pass dependency tree of all DM packages
@@ -90,19 +65,22 @@ mkdir -p StackTop/ups
 cp /dev/null StackTop/ups/StackTop.table
 while read LINE; do
     set $LINE
-    #setup -v -j $1 $2
     echo "setupRequired($1 $2)"  >>StackTop/ups/StackTop.table
 done < $MANIFEST
-eups declare -r StackTop StackTop stackTopDeps
-setup -k  StackTop stackTopDeps
+setup  -t $MANIFEST -m StackTop/ups/StackTop.table
+
+echo "----------------------------------------"
+eups list -s
+echo "----------------------------------------"
 
 # Determine the topo dependency tree to use as build sequence of all packages
-eups list --raw -s -D --topo StackTop > $ALL_PKG_BUILD_ORDER_MANIFEST.rawTopo
+# include cyclic dependency check (--check)
+eups list --raw -D --topo --setup  StackTop > $ALL_PKG_BUILD_ORDER_MANIFEST.rawTopo
 if [ $? != 0 ]; then
     echo "FAILURE to extract dependency manifest from package: StackTop.\n Check for dependency cycle."
     exit $BUILDBOT_FAILURE
 fi
-cat $ALL_PKG_BUILD_ORDER_MANIFEST.rawTopo | tac | sed -e "s/|.*//g" | grep -v StackTop > $ALL_PKG_BUILD_ORDER_MANIFEST
+tac $ALL_PKG_BUILD_ORDER_MANIFEST.rawTopo | sed -e "s/|.*//g" | grep -v StackTop > $ALL_PKG_BUILD_ORDER_MANIFEST
 
 #
 # now build the dependency lists for each setup DM package
@@ -112,14 +90,13 @@ while read LINE; do
     base_version=$2
     base_path="git/$base_package/$base_version"
     echo "creating manifest for package: $base_package  $base_version"
-    # new version of eups w/cyclic depdency check is not installed
-    #eups list --raw -s -D --topo --check $base_package $base_version | tac > $base_path/eups_topo.list
-    eups list --raw -s -D --topo $base_package $base_version | tac > $base_path/eups_topo.list
+    # include cyclic dependency check (--check)
+    eups list --raw -D --topo --setup -t $MANIFEST $base_package $base_version  > $base_path/eups_topo.list
     if [ $? != 0 ]; then
         echo "FAILURE to extract dependency manifest from package: $base_package.\nCheck for dependency cycle."
         exit $BUILDBOT_FAILURE
     fi
-    cat $base_path/eups_topo.list | sed -e "s/|/ /g" > $base_path/manifest
+    tac $base_path/eups_topo.list |  sed -e "s/|/ /g" > $base_path/manifest
 
     rm -f $base_path/internal.deps
     rm -f $base_path/external.deps

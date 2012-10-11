@@ -5,16 +5,13 @@
 # listed in the distribution server's current package list URL
 #
 import os,sys
-##
-# exclude these packages  - for packages which have been abandoned
-#                           or are just lsstpkg aliases
-#
-exclude_pkgs=set(["lsst","lssteups","sconsUtils","LSSTPipe", "lsstactive", "thirdparty_core", "obs_cfht", "ip_pipeline", "meas_pipeline", "coadd_pipeline", "meas_multifit", "sdqa" ])
+
+#========================================================================
 
 ##
 # current_list is the URL of the distribution stack contents
 #
-current_list = "http://dev.lsstcorp.org/pkgs/std/w12/beta.list"
+current_list = "http://sw.lsstcorp.org/beta.list"
 
 ##
 # createGitURL(package) - create the Git URL for a given package
@@ -23,11 +20,19 @@ def createGitURL(package):
 	return "git@git.lsstcorp.org:LSST/DMS/"+package+".git"
 
 #=======================================================================
-if len(sys.argv) < 2:
-    sys.stderr.write("FATAL: Usage: %s <git-branch>" % (sys.argv[0]))
+if len(sys.argv) < 3:
+    sys.stderr.write("FATAL: Usage: %s <git-branch> <eups-exclusion-list>" % (sys.argv[0]))
     sys.exit(1)
 
 gitBranch = sys.argv[1]
+eupsExclusion = sys.argv[2]
+
+# read in a list of eups packages we know are excluded.
+#eupsExclusionPkgs = "/lsst/home/buildbot/RHEL6/gitwork/etc/excludedEups_<lang>.txt"
+stream = open(eupsExclusion,"r")
+eups_exclude_pkgs = set(stream.read().split())
+stream.close()
+#print "eupsExclusion: ",eups_exclude_pkgs
 
 ##
 # open a the current.list URL, and remove the first line, and any lines
@@ -40,7 +45,9 @@ stream = os.popen("curl -s "+current_list+"| grep -v pseudo| grep -v external | 
 # the excluded packages.
 #
 pkgs = stream.read()
-pkg_list = set(pkgs.split())-exclude_pkgs
+pkg_list = set(pkgs.split()) - eups_exclude_pkgs
+
+#print "pkg_list:", pkg_list
 
 ##
 # open each of the packages at the distribution stack URL, look up the hash
