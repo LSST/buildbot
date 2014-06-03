@@ -4,6 +4,14 @@ import os
 from twisted.application import service
 from buildslave.bot import BuildSlave
 
+##########################################################################
+# Passwords extracted to  BbConfig.py so master.cfg&buildbot.tac 
+# can be git-archived.
+#-------------------------------------------------------------------------
+import BbConfig
+SlavePassword = BbConfig.getSecret()
+##########################################################################
+
 basedir = r'/usr/local/home/lsstsw2/BBSlaves/lsst-dev'
 rotateLength = 10000000
 maxRotatedFiles = 10
@@ -29,8 +37,9 @@ except ImportError:
 
 buildmaster_host = 'lsst-buildx.ncsa.illinois.edu'
 port = 9989
+
 slavename = 'BUILDBOT_SLAVE8'
-passwd = 'buildpassx1'
+passwd = SlavePassword
 keepalive = 600
 usepty = 0
 umask = None
