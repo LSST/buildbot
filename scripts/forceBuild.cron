@@ -1,0 +1,19 @@
+#!/bin/bash
+
+(
+        # FIXME: This locking mechanism is Linux-specific
+        # see: http://stackoverflow.com/questions/10526651/mac-os-x-equivalent-of-linux-flock1-command
+        #
+        flock -w 0 201 || exit
+
+        . $HOME/.bashrc
+        TIMESTAMPFILE="$HOME/var/log/forceBuild.timestamp"
+        LASTWRITE=$(ssh git@git.lsstcorp.org last-write)
+        TIMESTAMP=$(cat "$TIMESTAMPFILE" 2>/dev/null)
+       
+        if [[ $LASTWRITE > $TIMESTAMP  ]]; then
+                python $HOME/bin/forceBuild.py 2>&1 | tee -a "$HOME/var/log/forceBuild.last"
+                echo "$LASTWRITE" > "$TIMESTAMPFILE"
+        fi
+
+) 201>$HOME/var/log/forceBuild-cron.run
