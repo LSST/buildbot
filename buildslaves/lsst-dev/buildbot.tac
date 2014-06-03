@@ -4,9 +4,9 @@ import os
 from twisted.application import service
 from buildslave.bot import BuildSlave
 
-basedir = r'/lsst/home/buildbot/RHEL6/buildslaves/lsst-build3'
+basedir = r'/usr/local/home/lsstsw2/BBSlaves/lsst-dev'
 rotateLength = 10000000
-maxRotatedFiles = 5
+maxRotatedFiles = 10
 
 # if this is a relocatable tac file, get the directory containing the TAC
 if basedir == '.':
@@ -27,16 +27,18 @@ except ImportError:
   # probably not yet twisted 8.2.0 and beyond, can't set log yet
   pass
 
-buildmaster_host = 'lsst-build.ncsa.illinois.edu'
+buildmaster_host = 'lsst-buildx.ncsa.illinois.edu'
 port = 9989
-slavename = 'lsst-build3.ncsa.illinois.edu'
-passwd = 'CHANGE_TO_THE_PRODUCTION_PASS'
+slavename = 'BUILDBOT_SLAVE8'
+passwd = 'buildpassx1'
 keepalive = 600
 usepty = 0
-umask = 002
+umask = None
 maxdelay = 300
+allow_shutdown = None
 
 s = BuildSlave(buildmaster_host, port, slavename, passwd, basedir,
-               keepalive, usepty, umask=umask, maxdelay=maxdelay)
+               keepalive, usepty, umask=umask, maxdelay=maxdelay,
+               allow_shutdown=allow_shutdown)
 s.setServiceParent(application)
 
