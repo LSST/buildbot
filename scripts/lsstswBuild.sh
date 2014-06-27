@@ -15,11 +15,8 @@
 #
 # /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
 
-SCM_SERVER="git@git.lsstcorp.org"
-
-BUILDBOT_SUCCESS=0
-BUILDBOT_FAILURE=1
-BUILDBOT_WARNINGS=2
+source ${0%/*}/gitConstants.sh
+BUILDBOT_SCRIPTS=$BB_ANCESTRAL_HOME/RHEL6/scripts
 
 # Local setup
 # Reuse a existing lsstsw installation
@@ -86,42 +83,95 @@ fi
 
 # The displays provide feedback on the environment existing prior to lsst_build
 printenv
-eups list
+echo "eups list lsst_distrib:"
+eups list lsst_distrib
 
 cd $LSSTSW
 
+#=================================================================
+# First rebuild the stack. Only occurs if a git pkg changed. 
 if [ ! -f ./bin/rebuild ]; then
      print_error "Failed to find 'rebuild'." 
-     exit $BUILDBOT_FAILURE}
+     exit $BUILDBOT_FAILURE
 fi
 
 #
 echo "Rebuild is commencing....stand by; using $REF_LIST"
-./bin/rebuild  $REF_LIST
+./bin/rebuild  $REF_LIST 
 RET=$?
 
+#=================================================================
 #=================================================================
 # Following is necessary to test failures until a test package is fabricated 
 # for this very purpose.
 #  Case 1: uncomment all lines in following block - email sent to lsst-data
-#  Case 2: keep the lines with 'ERROR', '***', and ':::::' commented -
+#  Case 2: keep commented the lines with '***', and ':::::' -
 #          email sent only to Buildbot Nanny.
-# Remember to comment the whole following block when done testing.
+# Remember to re-comment the entire following block when done testing.
 #=================================================================
 #echo "Now forcing failure in order to test Buildbot error email delivery"
+#echo "*** error building product meas_algorithms."
+#echo "*** exit code = 2"
+#echo "*** log is in /usr/local/home/lsstsw2/build/meas_algorithms/_build.log"
 #echo "ctrl_provenance: 8.0.0.0+3 ERROR forced"
+#echo ":::::  scons: *** [src/WarpedPsf.os] Error 1"
+#echo ":::::  scons: building terminated because of errors."
 #echo "*** This is a test of Buildbot error handling system."
 #echo "*** I G N O R E this missive."
-#echo "This is not en error line"
+#echo "This is not an error line"
 #echo "::::: This concludes testing of Buildbot error handling for SCONS failures"
 #echo "::::: You may resume your normal activities."
 #exit $BUILDBOT_FAILURE
 #=================================================================
+#=================================================================
 
-
-if [ $RET -eq 0 ]; then
-    print_error "Congratulations, the DM stack has been installed at $LSSTSW."
-    exit $BUILDBOT_SUCCESS
+if [ $RET -ne 0 ]; then
+    print_error "Failed rebuild of DM stack." 
+    exit $BUILDBOT_FAILURE 
 fi  
-print_error "Failed rebuild of DM stack." 
-exit $BUILDBOT_FAILURE 
+
+# find EUPS build tag. 
+eval "$(grep -E '^BUILD=' "$LSSTSW"/build/manifest.txt | sed -e 's/BUILD/TAG/')"
+print_error "The DM stack has been installed at $LSSTSW with tag: $TAG."
+OLD_TAG=`cat $WORK_DIR/build/BB_Last_Tag`
+echo ":$OLD_TAG:$TAG:"
+if [ "$OLD_TAG" \> "$TAG" ] || [ "$OLD_TAG" == "$TAG" ]; then
+    echo "Since no git changes, no need to process further"
+    exit $BUILDBOT_SUCCESS
+fi
+
+#=================================================================
+# Next build the doxygen documentation
+cd $LSSTSW/build
+$BUILDBOT_SCRIPTS/create_xlinkdocs.sh --type "master" --user "buildbot" --host "lsst-dev.ncsa.illinois.edu" --path "/lsst/home/buildbot/public_html/doxygen"
+RET=$?
+
+if [ $RET -eq 2 ]; then
+    print_error "Doxygen documentation returned with a warning."
+    exit $BUILDBOT_WARNING
+elif [ $RET -ne 0 ]; then
+    print_error "FAILURE: Doxygen document was not installed."
+    exit $BUILDBOT_FAILURE
+fi
+print_error "Doxygen Documentation was installed successfully."
+
+#=================================================================
+# Then the BB_LastTag file is updated since full processing completed 
+# successfully.
+echo -n $TAG >  $WORK_DIR/build/BB_Last_Tag
+od -bc $WORK_DIR/build/BB_Last_Tag
+
+#=================================================================
+# Finally run a simple test of package integration
+cd $LSSTSW/build
+$BUILDBOT_SCRIPTS/runManifestDemo.sh --builder_name $BUILDER_NAME --build_number $BUILD_NUMBER --tag $TAG 
+RET=$?
+
+if [ $RET -eq 2 ]; then
+    print_error "The simple integration demo completed with some statistical deviation in the output comparison."
+    exit $BUILDBOT_WARNING
+elif [ $RET -ne 0 ]; then
+    print_error "There was an error running the simple integration demo."
+    exit $BUILDBOT_FAILURE
+fi
+print_error "The simple integration demo was successfully run."
