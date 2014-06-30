@@ -25,6 +25,8 @@ BUILDER_NAME=""
 BUILD_NUMBER="0"
 REFS=""
 
+FAILED_LOGS="FailedLogs"
+
 # Setup buildbot environment. Buildbot remotely invokes scripts with a 
 # stripped down environment.  
 umask 002
@@ -38,13 +40,14 @@ print_error() {
 
 WORK_DIR=`pwd`
 
-options=(getopt --long newbuild,builder_name:,build_number:,branch: -- "$@")
+options=(getopt --long newbuild,builder_name:,build_number:,branch:,email: -- "$@")
 while true
 do
     case "$1" in
         --builder_name) BUILDER_NAME=$2   ; shift 2 ;;
         --build_number) BUILD_NUMBER="$2" ; shift 2 ;;
         --branch)       BRANCH=$2         ; shift 2 ;;
+        --email)        EMAIL=$2          ; shift 2 ;;
         --newbuild)     NEW_BUILD="yes"   ; shift 1 ;;
         --) shift ; break ;;
         *) [ "$*" != "" ] && echo "Parsed options; arguments left are:$*:"
@@ -118,7 +121,7 @@ RET=$?
 #echo ":::::  scons: building terminated because of errors."
 #echo "*** This is a test of Buildbot error handling system."
 #echo "*** I G N O R E this missive."
-#echo "This is not an error line"
+#echo "This is not en error line"
 #echo "::::: This concludes testing of Buildbot error handling for SCONS failures"
 #echo "::::: You may resume your normal activities."
 #exit $BUILDBOT_FAILURE
@@ -127,10 +130,25 @@ RET=$?
 
 if [ $RET -ne 0 ]; then
     print_error "Failed rebuild of DM stack." 
+    mkdir -p $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER
+    for product in $LSSTSW/build/*; do
+        # Catch unit testing errors and scons (compile) errors
+        if [ -d $product ] &&  \
+           [ "`ls $product/test/.tests/*.fail 2> /dev/null | wc -l`" != "0" ]  || \
+           [ -e $product/_build.log ] && \
+           [  ! `grep -qs ' \*\*\* \| ::::: \| ERROR ' $product/_build.log` ]; then
+            package=`echo $product | sed -e "s/^.*\/build\///"`
+            cp -p $product/_build.log $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/${package}_build.log
+            cp -p $product/_build.sh $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/${package}_build.sh
+            cp -p $product/_build.tags $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/${package}_build.tags
+        fi
+    done
+    echo "The following build scripts and error logs are in directory: $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/"
+    ls -l $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER
     exit $BUILDBOT_FAILURE 
 fi  
 
-# find EUPS build tag. 
+# find current and last EUPS build tag.
 eval "$(grep -E '^BUILD=' "$LSSTSW"/build/manifest.txt | sed -e 's/BUILD/TAG/')"
 print_error "The DM stack has been installed at $LSSTSW with tag: $TAG."
 OLD_TAG=`cat $WORK_DIR/build/BB_Last_Tag`
@@ -164,7 +182,7 @@ od -bc $WORK_DIR/build/BB_Last_Tag
 #=================================================================
 # Finally run a simple test of package integration
 cd $LSSTSW/build
-$BUILDBOT_SCRIPTS/runManifestDemo.sh --builder_name $BUILDER_NAME --build_number $BUILD_NUMBER --tag $TAG 
+$BUILDBOT_SCRIPTS/runManifestDemo.sh --builder_name $BUILDER_NAME --build_number $BUILD_NUMBER --tag $TAG  --small
 RET=$?
 
 if [ $RET -eq 2 ]; then

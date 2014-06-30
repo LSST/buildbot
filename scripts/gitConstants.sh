@@ -11,15 +11,10 @@ WEB_HOST="lsst-web.ncsa.illinois.edu"
 # The name is shared by the following and /usr/local/home/buildbot/www/
 WEB_ROOT="/var/www/html/doxygen"
 
+ASTROMETRY_NET_DATA_DIR=/lsst/DC3/data/astrometry_net_data/
 
 DEMO_ROOT="https://dev.lsstcorp.org/cgit/contrib/demos/lsst_dm_stack_demo.git/snapshot"
 DEMO_TGZ="lsst_dm_stack_demo-master.tar.gz"
-
-#MANIFEST_LISTS_ROOT_URL="http://$SW_SERVER"
-#CURRENT_PACKAGE_LIST_URL="$MANIFEST_LISTS_ROOT_URL/v7_2.list"
-
-#DRP_LOCK_PATH="/lsst3/weekly/datarel-runs/locks"
-#MAX_DRP_LOCKS=3
 
 #LSST_DEVEL_RUNS_EMAIL="lsst-devel-runs@lsstcorp.org"
 
