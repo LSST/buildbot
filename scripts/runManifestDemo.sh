@@ -73,7 +73,7 @@ do
 done
 
 
-cd ~lsstsw2/build
+cd ~lsstsw/build
 WORK_DIR=`pwd`
 
 # Setup either requested tag or last successfully built lsst_distrib

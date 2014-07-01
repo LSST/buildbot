@@ -56,7 +56,7 @@ echo "REF_LIST: $REF_LIST   pwd: $WORK_DIR    NEW_BUILD: $NEW_BUILD"
 
 if [ "$NEW_BUILD" ==  "no" ]; then
     echo "Check reusable stack has well-formed eups directory"
-    if [ "$WORK_DIR" ==  "/usr/local/home/lsstsw2" ]; then
+    if [ "$WORK_DIR" ==  "/usr/local/home/lsstsw" ]; then
         export LSSTSW=$WORK_DIR
         export EUPS_PATH=$LSSTSW"/stack"
         . $LSSTSW/bin/setup.sh
