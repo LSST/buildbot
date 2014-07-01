@@ -117,19 +117,30 @@ if [ $RET -ne 0 ]; then
     print_error "Failed rebuild of DM stack." 
     mkdir -p $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER
     for product in $LSSTSW/build/*; do
+        PACKAGE=`echo $product | sed -e "s/^.*\/build\///"`
+        PKG_FAIL_DIR=$LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/${PACKAGE}/
         # Catch unit testing errors and scons (compile) errors
-        if [ -d $product ] &&  \
-           [ "`ls $product/tests/.tests/*.failed 2> /dev/null | wc -l`" != "0" ]  || \
-           [ -e $product/_build.log ] && \
-           [  ! `grep -qs ' \*\*\* \| ::::: \| ERROR ' $product/_build.log` ]; then
-            package=`echo $product | sed -e "s/^.*\/build\///"`
-            for i in log tags sh; do
-            cp -p $product/_build.$i $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/${package}_build.$i
-            done
+        if [ -d $product ] ; then
+            # Are there failed tests?
+            if [ -d $product/tests/.tests/ ] && \
+               [ "`ls $product/tests/.tests/*.failed 2> /dev/null | wc -l`" != "0" ]  ; then
+               mkdir -p  $PKG_FAIL_DIR
+               for i in $product/tests/.tests/*.failed; do
+                   cp $i  $PKG_FAIL_DIR/.
+               done
+            fi
+            # Are there error messages littered in the output?
+            if [ -e $product/_build.log ] && \
+               [  ! `grep -qs ' \*\*\* \| ::::: \| ERROR ' $product/_build.log` ]; then
+               mkdir -p $PKG_FAIL_DIR
+               for i in _build.log _build.tags _build.sh; do
+                   cp -p $product/$i $PKG_FAIL_DIR/.
+               done
+            fi
         fi
     done
     echo "The following build artifacts are in directory: $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/"
-    ls -l $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER
+    ls $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/*
     exit $BUILDBOT_FAILURE 
 fi  
 
