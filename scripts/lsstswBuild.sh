@@ -1,34 +1,23 @@
 #!/bin/bash
-#  Install the DM code stack 
-#          using the lsstsw package procedures: deploy and rebuild
+#  Install the DM code stack using the lsstsw package procedure: rebuild
 
 # /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
-#  In the future, this script will modify the actual DM stack on the cluster. 
-#  It therefore explicitly checks literal strings to ensure that non-standard 
-#  buildbot expectations regarding the 'work' directory location are 
-#  equivalent.
-#         
-#                N O T E    N O T E    N O T E
-#  Since this script is shadowing the real DM stack at the moment, any
-#  account reference or directory reference to 'lsstsw2' will ultimately
-#  be converted to 'lsstsw' when the cut-over occurs.
-#
+#  This script modifies the actual DM stack on the cluster. It therefore 
+#  explicitly checks literal strings to ensure that non-standard buildbot 
+#  expectations regarding the 'work' directory location are  equivalent.
 # /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
 
 source ${0%/*}/gitConstants.sh
 BUILDBOT_SCRIPTS=$BB_ANCESTRAL_HOME/RHEL6/scripts
 
-# Local setup
-# Reuse a existing lsstsw installation
+# Reuse an existing lsstsw installation
 NEW_BUILD="no"     
 BUILDER_NAME=""
 BUILD_NUMBER="0"
 REFS=""
-
 FAILED_LOGS="FailedLogs"
 
-# Setup buildbot environment. Buildbot remotely invokes scripts with a 
-# stripped down environment.  
+# Buildbot remotely invokes scripts with a stripped down environment.  
 umask 002
 
 #---------------------------------------------------------------------------
@@ -89,21 +78,17 @@ printenv
 echo "eups list lsst_distrib:"
 eups list lsst_distrib
 
-cd $LSSTSW
 
-#=================================================================
-# First rebuild the stack. Only occurs if a git pkg changed. 
+# Rebuild the stack if a git pkg changed. 
+cd $LSSTSW
 if [ ! -f ./bin/rebuild ]; then
      print_error "Failed to find 'rebuild'." 
      exit $BUILDBOT_FAILURE
 fi
-
-#
 echo "Rebuild is commencing....stand by; using $REF_LIST"
 ./bin/rebuild  $REF_LIST 
 RET=$?
 
-#=================================================================
 #=================================================================
 # Following is necessary to test failures until a test package is fabricated 
 # for this very purpose.
@@ -115,7 +100,7 @@ RET=$?
 #echo "Now forcing failure in order to test Buildbot error email delivery"
 #echo "*** error building product meas_algorithms."
 #echo "*** exit code = 2"
-#echo "*** log is in /usr/local/home/lsstsw2/build/meas_algorithms/_build.log"
+#echo "*** log is in /usr/local/home/lsstsw/build/meas_algorithms/_build.log"
 #echo "ctrl_provenance: 8.0.0.0+3 ERROR forced"
 #echo ":::::  scons: *** [src/WarpedPsf.os] Error 1"
 #echo ":::::  scons: building terminated because of errors."
@@ -126,40 +111,39 @@ RET=$?
 #echo "::::: You may resume your normal activities."
 #exit $BUILDBOT_FAILURE
 #=================================================================
-#=================================================================
 
 if [ $RET -ne 0 ]; then
+    # Archive the failed build artifacts
     print_error "Failed rebuild of DM stack." 
     mkdir -p $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER
     for product in $LSSTSW/build/*; do
         # Catch unit testing errors and scons (compile) errors
         if [ -d $product ] &&  \
-           [ "`ls $product/test/.tests/*.fail 2> /dev/null | wc -l`" != "0" ]  || \
+           [ "`ls $product/tests/.tests/*.failed 2> /dev/null | wc -l`" != "0" ]  || \
            [ -e $product/_build.log ] && \
            [  ! `grep -qs ' \*\*\* \| ::::: \| ERROR ' $product/_build.log` ]; then
             package=`echo $product | sed -e "s/^.*\/build\///"`
-            cp -p $product/_build.log $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/${package}_build.log
-            cp -p $product/_build.sh $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/${package}_build.sh
-            cp -p $product/_build.tags $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/${package}_build.tags
+            for i in log tags sh; do
+            cp -p $product/_build.$i $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/${package}_build.$i
+            done
         fi
     done
-    echo "The following build scripts and error logs are in directory: $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/"
+    echo "The following build artifacts are in directory: $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/"
     ls -l $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER
     exit $BUILDBOT_FAILURE 
 fi  
 
-# find current and last EUPS build tag.
+# Find current and last EUPS build tag.
 eval "$(grep -E '^BUILD=' "$LSSTSW"/build/manifest.txt | sed -e 's/BUILD/TAG/')"
 print_error "The DM stack has been installed at $LSSTSW with tag: $TAG."
 OLD_TAG=`cat $WORK_DIR/build/BB_Last_Tag`
-echo ":$OLD_TAG:$TAG:"
+echo ":LastTag:ThisTag: --> :$OLD_TAG:$TAG:"
 if [ "$OLD_TAG" \> "$TAG" ] || [ "$OLD_TAG" == "$TAG" ]; then
     echo "Since no git changes, no need to process further"
     exit $BUILDBOT_SUCCESS
 fi
 
-#=================================================================
-# Next build the doxygen documentation
+# Build doxygen documentation
 cd $LSSTSW/build
 $BUILDBOT_SCRIPTS/create_xlinkdocs.sh --type "master" --user "buildbot" --host "lsst-dev.ncsa.illinois.edu" --path "/lsst/home/buildbot/public_html/doxygen"
 RET=$?
@@ -171,7 +155,7 @@ elif [ $RET -ne 0 ]; then
     print_error "FAILURE: Doxygen document was not installed."
     exit $BUILDBOT_FAILURE
 fi
-print_error "Doxygen Documentation was installed successfully."
+echo "Doxygen Documentation was installed successfully."
 
 #=================================================================
 # Then the BB_LastTag file is updated since full processing completed 
@@ -192,4 +176,4 @@ elif [ $RET -ne 0 ]; then
     print_error "There was an error running the simple integration demo."
     exit $BUILDBOT_FAILURE
 fi
-print_error "The simple integration demo was successfully run."
+echo "The simple integration demo was successfully run."

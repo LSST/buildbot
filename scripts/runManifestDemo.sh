@@ -1,16 +1,6 @@
 #! /bin/bash
 # Run the demo code to test DM algorithms
 
-###############################################################################
-###############################################################################
-# 
-# Due to the buildbot characteristic which always starts with a blank env,
-# we need to collect and invoke the path info needed for a user run.
-# 
-###############################################################################
-# Implementation will accept an eups tag to build with a specific manifest
-# If not provided, use the latest master-only build of lsst_distrib
-
 DEBUG=debug
 
 #--------------------------------------------------------------------------
@@ -37,6 +27,11 @@ usage() {
     echo "          --log_url <url>: URL for web-access to the build logs."
     echo "       --step_name <name>: assigned step name in build."
     exit
+}
+
+# print to stderr -  Assumes stderr is fd 2. BB prints stderr in red.
+print_error() {
+    echo $@ > /proc/self/fd/2
 }
 #--------------------------------------------------------------------------
 
@@ -91,27 +86,17 @@ else
     setup lsst_distrib $VERSION
 fi
 #*************************************************************************
-echo "EUPS-tag: $TAG"
-echo "Version: $VERSION"
-echo "Dataset size: $SIZE"
-echo "BUILDER_NAME: $BUILDER_NAME"
-echo "BUILD_NUMBER: $BUILD_NUMBER"
-#echo "LOG_DEST: $LOG_DEST"
-#echo "LOG_URL: $LOG_URL"
-echo "Current `umask -p`"
-#*************************************************************************
-
-echo ""
 echo "----------------------------------------------------------------"
+echo "EUPS-tag: $TAG     Version: $VERSION"
+echo "BUILDER_NAME: $BUILDER_NAME    BUILD_NUMBER: $BUILD_NUMBER"
+echo "Dataset size: $SIZE"
+echo "Current `umask -p`"
 echo "Setup lsst_distrib "
 eups list  -s
 echo "-----------------------------------------------------------------"
-echo ""
 
 if [ -z  "$PIPE_TASKS_DIR" -o -z "$OBS_SDSS_DIR" ]; then
-      echo "FAILURE: ----------------------------------------------------------"
-      echo "Failed to setup either PIPE_TASKS or OBS_SDSS; both of  which are required by $DEMO_BASENAME"
-      echo "FAILURE: ----------------------------------------------------------"
+      print_error "Failed to setup either PIPE_TASKS or OBS_SDSS; both of  which are required by $DEMO_BASENAME"
       exit $BUILDBOT_FAILURE
 fi
 
@@ -119,18 +104,14 @@ fi
 echo "curl -ko $DEMO_TGZ $DEMO_ROOT/$DEMO_TGZ"
 curl -ko $DEMO_TGZ $DEMO_ROOT/$DEMO_TGZ
 if [ ! -f $DEMO_TGZ ]; then
-    echo "FAILURE: -----------------------------------------------------------"
-    echo "Failed to acquire demo from: $DEMO_ROOT/$DEMO_TGZ  ."
-    echo "FAILURE: -----------------------------------------------------------"
+    print_error "Failed to acquire demo from: $DEMO_ROOT/$DEMO_TGZ  ."
     exit $BUILDBOT_FAILURE
 fi
 
 echo "tar xzf $DEMO_TGZ"
 tar xzf $DEMO_TGZ
 if [ $? != 0 ]; then
-    echo "FAILURE: -----------------------------------------------------------"
-    echo "Failed to unpack: $DEMO_TGZ"
-    echo "FAILURE: -----------------------------------------------------------"
+    print_error "Failed to unpack: $DEMO_TGZ"
     exit $BUILDBOT_FAILURE
 fi
 
@@ -138,22 +119,15 @@ DEMO_BASENAME=`basename $DEMO_TGZ | sed -e "s/\..*//"`
 echo "DEMO_BASENAME: $DEMO_BASENAME"
 cd $DEMO_BASENAME
 if [ $? != 0 ]; then
-    echo "FAILURE: -----------------------------------------------------------"
-    echo "Failed to find unpacked directory: $DEMO_BASENAME"
-    echo "FAILURE: -----------------------------------------------------------"
+    print_error "Failed to find unpacked directory: $DEMO_BASENAME"
     exit $BUILDBOT_FAILURE
 fi
 
-pwd
-echo "./bin/demo.sh --$SIZE"
 ./bin/demo.sh --$SIZE
 if [ $? != 0 ]; then
-    echo "FAILURE: -----------------------------------------------------------"
-    echo "Failed during execution of  $DEMO_BASENAME"
-    echo "FAILURE: -----------------------------------------------------------"
+    print_error "Failed during execution of  $DEMO_BASENAME"
     exit $BUILDBOT_FAILURE
 fi
-
 
 # Add column position to each label for ease of reading the output comparison
 COLUMNS=`head -1 detected-sources$SIZE_EXT.txt| sed -e "s/^#//" `
