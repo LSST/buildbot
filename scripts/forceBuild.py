@@ -1,3 +1,7 @@
+
+# forceBuild.py - trigger a buildbot DM_stack build  
+#                 using the well-known but strictly limited account
+ 
 import mechanize
 
 browser = mechanize.Browser()
