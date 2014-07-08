@@ -56,7 +56,7 @@ echo "REF_LIST: $REF_LIST   pwd: $WORK_DIR    NEW_BUILD: $NEW_BUILD"
 
 if [ "$NEW_BUILD" ==  "no" ]; then
     echo "Check reusable stack has well-formed eups directory"
-    if [ "$WORK_DIR" ==  "/usr/local/home/lsstsw" ]; then
+    if [ "$WORK_DIR" ==  "/lsst/home/lsstsw" ]; then
         export LSSTSW=$WORK_DIR
         export EUPS_PATH=$LSSTSW"/stack"
         . $LSSTSW/bin/setup.sh
@@ -128,10 +128,12 @@ if [ $RET -ne 0 ]; then
                for i in $product/tests/.tests/*.failed; do
                    cp $i  $PKG_FAIL_DIR/.
                done
-            fi
+               for i in _build.log _build.tags _build.sh; do
+                   cp -p $product/$i $PKG_FAIL_DIR/.
+               done
             # Are there error messages littered in the output?
-            if [ -e $product/_build.log ] && \
-               [  ! `grep -qs ' \*\*\* \| ::::: \| ERROR ' $product/_build.log` ]; then
+            elif [ -e $product/_build.log ] && \
+               [  ! `grep -qs '\*\*\* \|ERROR ' $product/_build.log` ]; then
                mkdir -p $PKG_FAIL_DIR
                for i in _build.log _build.tags _build.sh; do
                    cp -p $product/$i $PKG_FAIL_DIR/.
@@ -160,10 +162,12 @@ $BUILDBOT_SCRIPTS/create_xlinkdocs.sh --type "master" --user "buildbot" --host "
 RET=$?
 
 if [ $RET -eq 2 ]; then
-    print_error "Doxygen documentation returned with a warning."
+    print_error "*** Doxygen documentation returned with a warning."
+    print_error "*** Review the Buildbot 'stdio' log for build: $BUILD_NUMBER."
     exit $BUILDBOT_WARNING
 elif [ $RET -ne 0 ]; then
-    print_error "FAILURE: Doxygen document was not installed."
+    print_error "*** FAILURE: Doxygen document was not installed."
+    print_error "*** Review the Buildbot 'stdio' log for build: $BUILD_NUMBER."
     exit $BUILDBOT_FAILURE
 fi
 echo "Doxygen Documentation was installed successfully."
@@ -181,10 +185,11 @@ $BUILDBOT_SCRIPTS/runManifestDemo.sh --builder_name $BUILDER_NAME --build_number
 RET=$?
 
 if [ $RET -eq 2 ]; then
-    print_error "The simple integration demo completed with some statistical deviation in the output comparison."
+    print_error "*** The simple integration demo completed with some statistical deviation in the output comparison."
     exit $BUILDBOT_WARNING
 elif [ $RET -ne 0 ]; then
-    print_error "There was an error running the simple integration demo."
+    print_error "*** There was an error running the simple integration demo."
+    print_error "*** Review the Buildbot 'stdio' log for build: $BUILD_NUMBER."
     exit $BUILDBOT_FAILURE
 fi
 echo "The simple integration demo was successfully run."
