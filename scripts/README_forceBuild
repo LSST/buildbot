@@ -17,6 +17,6 @@ forceBuild.py - logs into 'Builder DM_stack', forces a build, then completes.
         The build is initiated through the buildbot web interface.  
 
         It uses the 'mechanize' web-gui python support interface.  
-        Mechanize must be installed on the rallsman PYTHONPATH
+        Mechanize must be installed in the lsstsw/.local{bin/lib/etc} framework.
 
 
