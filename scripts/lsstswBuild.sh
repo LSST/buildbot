@@ -116,7 +116,7 @@ if [ $RET -ne 0 ]; then
     # Archive the failed build artifacts
     print_error "Failed rebuild of DM stack." 
     mkdir -p $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER
-    for product in $LSSTSW/build/*; do
+    for product in $LSSTSW/build/[a-z]*; do
         PACKAGE=`echo $product | sed -e "s/^.*\/build\///"`
         PKG_FAIL_DIR=$LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/${PACKAGE}/
         # Catch unit testing errors and scons (compile) errors
@@ -126,7 +126,7 @@ if [ $RET -ne 0 ]; then
                [ "`ls $product/tests/.tests/*.failed 2> /dev/null | wc -l`" != "0" ]  ; then
                mkdir -p  $PKG_FAIL_DIR
                for i in $product/tests/.tests/*.failed; do
-                   cp $i  $PKG_FAIL_DIR/.
+                   cp -p $i  $PKG_FAIL_DIR/.
                done
                for i in _build.log _build.tags _build.sh; do
                    cp -p $product/$i $PKG_FAIL_DIR/.
@@ -151,10 +151,10 @@ eval "$(grep -E '^BUILD=' "$LSSTSW"/build/manifest.txt | sed -e 's/BUILD/TAG/')"
 print_error "The DM stack has been installed at $LSSTSW with tag: $TAG."
 OLD_TAG=`cat $WORK_DIR/build/BB_Last_Tag`
 echo ":LastTag:ThisTag: --> :$OLD_TAG:$TAG:"
-if [ "$OLD_TAG" \> "$TAG" ] || [ "$OLD_TAG" == "$TAG" ]; then
-    echo "Since no git changes, no need to process further"
-    exit $BUILDBOT_SUCCESS
-fi
+#if [ "$OLD_TAG" \> "$TAG" ] || [ "$OLD_TAG" == "$TAG" ]; then
+#    echo "Since no git changes, no need to process further"
+#    exit $BUILDBOT_SUCCESS
+#fi
 
 # Build doxygen documentation
 cd $LSSTSW/build

@@ -47,7 +47,7 @@ done
 
 
 if [ -z "$DOXY_TYPE"  -o  -z "$REMOTE_USER"   -o   -z "$REMOTE_HOST"  -o  -z "$REMOTE_DIR" ]; then
-    echo "FATAL:  Missing a required input parameter."
+    echo "***  Missing a required input parameter."
     usage
     exit $BUILDBOT_FAILURE
 fi
@@ -63,7 +63,7 @@ if [ "$DOXY_TYPE" == "master" ]; then
     BUILD_NUM="b"`eups list --raw lsst_distrib | sed -e "s/^.*|//" | sed -e "s/:/\n/g" | sed -e "s/^b//" | grep "^[0-9]" | sort -nr | head -1`
     echo "BUILD_NUM: $BUILD_NUM"
     if [ -z "$BUILD_NUM" ]; then
-        echo "FATAL: Failed: to determine most recent master build number."
+        echo "*** Failed: to determine most recent master build number."
         exit $BUILDBOT_FAILURE
     else
         DOXY_TYPE=$BUILD_NUM
@@ -83,13 +83,13 @@ echo "SCM_SERVER: $SCM_SERVER"
 
 ssh "$REMOTE_USER@$REMOTE_HOST" pwd
 if [ $? != 0 ]; then
-    echo "$REMOTE_USER@$REMOTE_HOST  is not an accessible URL"
-    echo -n "FATAL: "; usage
+    echo "*** $REMOTE_USER@$REMOTE_HOST  is not an accessible URL"
+    echo -n "Failed: "; usage
     exit $BUILDBOT_FAILURE
 fi
 ssh "$REMOTE_USER@$REMOTE_HOST"  test -e $REMOTE_DIR 
 if [ $? != 0 ]; then
-    echo "FATAL: Failed: \"ssh $REMOTE_USER@$REMOTE_HOST  test -e $REMOTE_DIR\"\nIs directory: \"$REMOTE_DIR\" valid?"
+    echo "*** Failed: \"ssh $REMOTE_USER@$REMOTE_HOST  test -e $REMOTE_DIR\"\n*** Is directory: \"$REMOTE_DIR\" valid?"
     exit $BUILDBOT_FAILURE
 fi
 
@@ -101,7 +101,7 @@ SCM_LOCAL_DIR=lsstDoxygen
 # SCM clone devenv/lsstDoxygen ** from master **
 git clone git@$SCM_SERVER:LSST/DMS/devenv/lsstDoxygen.git
 if [ $? != 0 ]; then
-    echo "FATAL: Failed to clone 'devenv/lsstDoxygen.git'."
+    echo "*** Failed to clone 'devenv/lsstDoxygen.git'."
     exit $BUILDBOT_FAILURE
 fi
 
@@ -116,14 +116,14 @@ export xlinkdoxy=1
 
 scons 
 if [  $? != 0 ]; then
-    echo "FATAL: Failed to build lsstDoxygen package."
+    echo "*** Failed to build lsstDoxygen package."
     exit $BUILDBOT_FAILURE
 fi
 
 # Now setup for build of Data Release library documentation
 DATAREL_VERSION=`eups list -t $DOXY_TYPE datarel | awk '{print $1}'`
 if [ -z "$DATAREL_VERSION" ]; then
-    echo "FATAL: Failed to find datarel \"$DOXY_TYPE\" version."
+    echo "*** Failed to find datarel \"$DOXY_TYPE\" version."
     exit $BUILDBOT_FAILURE
 fi
 echo "DATAREL_VERSION: $DATAREL_VERSION"
@@ -136,13 +136,13 @@ echo ""
 
 $WORK_DIR/$SCM_LOCAL_DIR/bin/makeDocs --nodot datarel $DATAREL_VERSION > MakeDocs.out
 if [ $? != 0 ] ; then
-    echo "FATAL: Failed to generate complete makeDocs output for \"$DOXY_TYPE\" source."
+    echo "*** Failed to generate complete makeDocs output for \"$DOXY_TYPE\" source."
     exit $BUILDBOT_FAILURE
 fi
 
 doxygen MakeDocs.out
 if [ $? != 0 ] ; then
-    echo "FATAL: Failed to generate doxygen documentation for \"$DOXY_TYPE\" source."
+    echo "*** Failed to generate doxygen documentation for \"$DOXY_TYPE\" source."
     exit $BUILDBOT_FAILURE
 fi
 
@@ -160,7 +160,7 @@ ssh $REMOTE_USER@$REMOTE_HOST mkdir -p $REMOTE_DIR/$DOC_DIR
 echo "CMD: scp -qr $WORK_DIR/$SCM_LOCAL_DIR/$DOC_DIR  ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}"
 scp -qr $WORK_DIR/$SCM_LOCAL_DIR/$DOC_DIR  ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}
 if [ $? != 0 ]; then
-    echo "FATAL: Failed to copy doxygen documentation: $WORK_DIR/$SCM_LOCAL_DIR/$DOC_DIR to ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}"
+    echo "*** Failed to copy doxygen documentation: $WORK_DIR/$SCM_LOCAL_DIR/$DOC_DIR to ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}"
     exit $BUILDBOT_FAILURE
 fi
 echo "INFO: Doxygen documentation from \"$DOC_DIR\" copied to \"$DESTINATION/$DOC_DIR\""
@@ -180,10 +180,8 @@ fi
 echo "INFO: ssh $REMOTE_USER@$REMOTE_HOST \"cd $REMOTE_DIR; ln -s  $REMOTE_DIR/$DOC_DIR $SYM_LINK\""
 ssh $REMOTE_USER@$REMOTE_HOST "cd $REMOTE_DIR;ln -s $REMOTE_DIR/$DOC_DIR $SYM_LINK"
 if [ $? != 0 ]; then
-    echo "FATAL: Failed to symlink: \"$SYM_LINK\", to new doxygen documentation: \"$DOC_DIR\""
+    echo "*** Failed to symlink: \"$SYM_LINK\", to new doxygen documentation: \"$DOC_DIR\""
     exit $BUILDBOT_FAILURE
 fi
 echo "INFO: Updated symlink: \"$SYM_LINK\", to point to new doxygen documentation: $DOC_DIR."
 
-echo ""
-echo "INFO: NOTE: crontab should peridocally run a job to remove aged documents."

@@ -96,7 +96,7 @@ eups list  -s
 echo "-----------------------------------------------------------------"
 
 if [ -z  "$PIPE_TASKS_DIR" -o -z "$OBS_SDSS_DIR" ]; then
-      print_error "Failed to setup either PIPE_TASKS or OBS_SDSS; both of  which are required by $DEMO_BASENAME"
+      print_error "*** Failed to setup either PIPE_TASKS or OBS_SDSS; both of  which are required by $DEMO_BASENAME"
       exit $BUILDBOT_FAILURE
 fi
 
@@ -104,14 +104,14 @@ fi
 echo "curl -ko $DEMO_TGZ $DEMO_ROOT/$DEMO_TGZ"
 curl -ko $DEMO_TGZ $DEMO_ROOT/$DEMO_TGZ
 if [ ! -f $DEMO_TGZ ]; then
-    print_error "Failed to acquire demo from: $DEMO_ROOT/$DEMO_TGZ  ."
+    print_error "*** Failed to acquire demo from: $DEMO_ROOT/$DEMO_TGZ  ."
     exit $BUILDBOT_FAILURE
 fi
 
 echo "tar xzf $DEMO_TGZ"
 tar xzf $DEMO_TGZ
 if [ $? != 0 ]; then
-    print_error "Failed to unpack: $DEMO_TGZ"
+    print_error "*** Failed to unpack: $DEMO_TGZ"
     exit $BUILDBOT_FAILURE
 fi
 
@@ -119,13 +119,13 @@ DEMO_BASENAME=`basename $DEMO_TGZ | sed -e "s/\..*//"`
 echo "DEMO_BASENAME: $DEMO_BASENAME"
 cd $DEMO_BASENAME
 if [ $? != 0 ]; then
-    print_error "Failed to find unpacked directory: $DEMO_BASENAME"
+    print_error "*** Failed to find unpacked directory: $DEMO_BASENAME"
     exit $BUILDBOT_FAILURE
 fi
 
 ./bin/demo.sh --$SIZE
 if [ $? != 0 ]; then
-    print_error "Failed during execution of  $DEMO_BASENAME"
+    print_error "*** Failed during execution of  $DEMO_BASENAME"
     exit $BUILDBOT_FAILURE
 fi
 
@@ -138,6 +138,7 @@ echo $NEWCOLUMNS
 echo "$BB_ANCESTRAL_HOME/numdiff/bin/numdiff -# 11 detected-sources$SIZE_EXT.txt.expected detected-sources$SIZE_EXT.txt"
 $BB_ANCESTRAL_HOME/numdiff/bin/numdiff -# 11 detected-sources$SIZE_EXT.txt.expected detected-sources$SIZE_EXT.txt
 if  [ $? != 0 ]; then
+    print_error "*** Warning: output results not within error tolerance for: $DEMO_BASENAME"
     exit $BUILDBOT_WARNINGS
-fi
 exit  $BUILDBOT_SUCCESS
+fi

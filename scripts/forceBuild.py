@@ -1,7 +1,6 @@
 
 # forceBuild.py - trigger a buildbot DM_stack build  
 #                 using the well-known but strictly limited account
- 
 import mechanize
 
 browser = mechanize.Browser()
@@ -18,6 +17,6 @@ response = browser.submit()
 
 # Submit forceBuild form; no need to enter params since defaults OK
 browser.select_form("force_build")
-browser.form['email'] = 'everyman <robyn@lsst.org>'
+browser.form['email'] = 'everyman <lsst-dm-dev@lsstcorp.org>'
 response = browser.submit()
 
