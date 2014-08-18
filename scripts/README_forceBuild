@@ -1,0 +1,22 @@
+README_forceBuild      3 June 2014
+
+forceBuild  supports on-git-change triggered builds on lsst-dev.  
+            We do not use the Buildbot method for that event.
+
+
+The cron command currently used on lsst-dev as rallsman:
+*/10 * * * * /lsst/home/lsstsw/bin/forceBuild-cron
+
+forceBuild-cron - determines if there has been a git change since the last 
+        time the cron job was run.  If there was, it invokes forceBuild.py
+
+        The last-git-change event is determined by gitolite hook: last-write - 
+        which was probably written by Mario or possibly acquired off the web.
+
+forceBuild.py - logs into 'Builder DM_stack', forces a build, then completes.
+        The build is initiated through the buildbot web interface.  
+
+        It uses the 'mechanize' web-gui python support interface.  
+        Mechanize must be installed in the lsstsw/.local{bin/lib/etc} framework.
+
+

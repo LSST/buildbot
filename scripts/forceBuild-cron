@@ -1,0 +1,27 @@
+#!/bin/bash
+
+DIR=$(cd "$(dirname "$0")"; pwd -P)
+
+(
+        # FIXME: This locking mechanism is Linux-specific
+        # see: http://stackoverflow.com/questions/10526651/mac-os-x-equivalent-of-linux-flock1-command
+        #
+        flock -w 0 202 || exit
+
+        # Source the settings
+        . $DIR/../etc/settings.cfg.sh
+
+        TIMESTAMPFILE="$HOME/var/log/forceBuild.timestamp"
+        LASTWRITE=$(ssh git@git.lsstcorp.org last-write)
+        TIMESTAMP=$(cat "$TIMESTAMPFILE" 2>/dev/null)
+
+        if [[ $LASTWRITE > $TIMESTAMP  ]]; then
+                . $DIR/setup.sh
+                python $HOME/bin/forceBuild.py 2>&1 | tee -a "$HOME/var/log/forceBuild.last"
+                # Refer to the buildbot DM_stack build logs at: 
+                # http://lsst-buildx.ncsa.illinois.edu:8010/builders/DM_stack
+
+                echo "$LASTWRITE" > "$TIMESTAMPFILE"
+        fi
+
+) 202>$HOME/var/log/forceBuild-cron.run

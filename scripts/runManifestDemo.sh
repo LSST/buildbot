@@ -1,166 +1,144 @@
 #! /bin/bash
 # Run the demo code to test DM algorithms
 
-###############################################################################
-###############################################################################
-# 
-# Due to the buildbot characteristic which always starts with a blank env,
-# we need to collect and invoke the path info needed for a user run.
-# 
-# This script uses a Manifest list to setup the run environment
-#
-###############################################################################
-###############################################################################
-
-
-#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
-# GLOBALS to be sourced from SRPs globals header - when ready
-#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
-ASTROMETRY_NET_DATA_DIR=/lsst/DC3/data/astrometry_net_data/
-#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
-
 DEBUG=debug
 
+#--------------------------------------------------------------------------
 # Standalone invocation for gcc master stack:
-# export LSST_HOME=/lsst/DC3/stacks/gcc445-RH6/28nov2011
-# export LSST_DEVEL=/lsst/home/buildbot/RHEL6//buildslaves/lsst-build1/SMBRG/sandbox
-# source loadLSST.sh
-# cd /lsst/home/buildbot/RHEL6//builds/SMBRG/work
-# /lsst/home/buildbot/RHEL6/scripts/runManifestDemo.sh  --builder_name "Dunno" --build_number "1" --manifest /lsst/home/buildbot/RHEL6//builds/SMBRG/work/lastSuccessfulBuildManifest.list 
+#--------------------------------------------------------------------------
+# First: setup lsstsw stack
+# cd $lsstsw/build
+# /lsst/home/buildbot/RHEL6/scripts/runManifestDemo.sh  --builder_name "Dunno" --build_number "1"  --small
+# or
+# /lsst/home/buildbot/RHEL6/scripts/runManifestDemo.sh  --builder_name "Dunno" --build_number "1"  
 
 #--------------------------------------------------------------------------
 usage() {
-#80 cols  ................................................................................
-    echo "Usage: $0 [options] package"
+    echo "Usage: $0 [options]"
     echo "Initiate demonstration run."
     echo
     echo "Options:"
     echo "                  --debug: print out extra debugging info"
-    echo "        --manifest <path>: manifest list for eups-setup."
-    echo "    --builder_name <name>: buildbot's build name assigned to run"
-    echo "  --build_number <number>: buildbot's build number assigned to run"
+    echo "              --tag <id> : eups-tag for eups-setup or defaults to latest master build."
+    echo "                 --small : to use small dataset; otherwise a mini-production size will be used."
+    echo "    --builder_name <name>: buildbot's build name assigned to run."
+    echo "  --build_number <number>: buildbot's build number assigned to run."
+    echo "--log_dest <buildbot@host:remotepath>: scp destination_path."
+    echo "          --log_url <url>: URL for web-access to the build logs."
+    echo "       --step_name <name>: assigned step name in build."
+    exit
+}
+
+# print to stderr -  Assumes stderr is fd 2. BB prints stderr in red.
+print_error() {
+    echo $@ > /proc/self/fd/2
 }
 #--------------------------------------------------------------------------
 
 # Setup LSST buildbot support fnunctions
 source ${0%/*}/gitConstants.sh
-source ${0%/*}/build_functions.sh
-source ${0%/*}/gitBuildFunctions.sh
-
-WEB_ROOT="/usr/local/home/buildbot/www/"
-
-# -------------------
-# -- get arguments --
-# -------------------
-
-options=$(getopt -l debug,builder_name:,build_number:,manifest: -- "$@")
 
 BUILDER_NAME=""
 BUILD_NUMBER=0
-MANIFEST=
+LOG_DEST=""
+LOG_URL=""
+STEP_NAME=""
+TAG=""
+SIZE=""
+SIZE_EXT=""
+
+options=$(getopt -l debug,help,small,builder_name:,build_number:,tag:,log_dest:,log_url:,step_name: -- "$@")
 
 while true
 do
     case $1 in
-        --debug)        DEBUG=true; shift;;
+        --debug)        DEBUG=true; shift 1;;
+        --help)         usage;;
+        --small)        SIZE="small";
+                        SIZE_EXT="_small"; 
+                        shift 1;;
         --builder_name) BUILDER_NAME=$2; shift 2;;
         --build_number) BUILD_NUMBER=$2; shift 2;;
-        --manifest)     MANIFEST=$2; shift 2;;
-        *) [ "$*" != "" ] && echo "parsed options; arguments left are:$*:"
-             break;;
+        --tag)          TAG=$2; shift 2;;
+        --log_url)      LOG_URL=$2; shift 2;;
+        --log_dest)     LOG_DEST=$2;
+                        LOG_DEST_HOST=${LOG_DEST%%\:*}; # buildbot@master
+                        LOG_DEST_DIR=${LOG_DEST##*\:};  # /var/www/html/logs
+                        shift 2;;
+        --step_name)    STEP_NAME=$2; shift 2;;
+        --)             break ;;
+        *)              [ "$*" != "" ] && usage;
+                        break;;
     esac
 done
 
 
-source $LSST_HOME/loadLSST.sh
-
-eups admin clearCache -Z $LSST_DEVEL
-eups admin buildCache -Z $LSST_DEVEL
-
-#*************************************************************************
-echo "BUILDER_NAME: $BUILDER_NAME"
-echo "BUILD_NUMBER: $BUILD_NUMBER"
-echo "MANIFEST: $MANIFEST"
-echo "Current `umask -p`"
-#*************************************************************************
-
+cd ~lsstsw/build
 WORK_DIR=`pwd`
 
-##
-# ensure full dependencies file is available
-##
-if [ ! -e $MANIFEST ] || [ "`cat $MANIFEST | wc -l`" = "0" ]; then
-    usage
-    echo "FAILURE: -----------------------------------------------------------"
-    echo "Failed to find file: $MANIFEST, in buildbot work directory."
-    echo "FAILURE: -----------------------------------------------------------"
-    exit $BUILDBOT_FAILURE
+# Setup either requested tag or last successfully built lsst_distrib
+if [ -n "$TAG" ]; then
+    setup -t $TAG lsst_distrib 
+else
+    setup -j lsst_distrib
+    cd $LSST_DISTRIB_DIR/../
+    VERSION=`ls | sort -r -n -t+ +1 -2 | head -1`
+    setup lsst_distrib $VERSION
 fi
-
-
-# Acquire and Load the demo package in buildbot work directory
-echo "curl -O http://dev.lsstcorp.org/cgit/contrib/demos/lsst_dm_stack_demo.git/snapshot/lsst_dm_stack_demo-Summer2012.tar.gz"
-curl -O http://dev.lsstcorp.org/cgit/contrib/demos/lsst_dm_stack_demo.git/snapshot/lsst_dm_stack_demo-Summer2012.tar.gz
-if [ ! -f lsst_dm_stack_demo-Summer2012.tar.gz ]; then
-    echo "FAILURE: -----------------------------------------------------------"
-    echo "Failed to acquire demo from: http://dev.lsstcorp.org/cgit/contrib/demos/lsst_dm_stack_demo.git/snapshot/lsst_dm_stack_demo-Summer2012.tar.gz  ."
-    echo "FAILURE: -----------------------------------------------------------"
-    exit $BUILDBOT_FAILURE
-fi
-
-echo "tar xzf lsst_dm_stack_demo-Summer2012.tar.gz"
-tar xzf lsst_dm_stack_demo-Summer2012.tar.gz
-if [ $? != 0 ]; then
-    echo "FAILURE: -----------------------------------------------------------"
-    echo "Failed to unpack: lsst_dm_stack_demo-Summer2012.tar.gz  ."
-    echo "FAILURE: -----------------------------------------------------------"
-    exit $BUILDBOT_FAILURE
-fi
-
-cd lsst_dm_stack_demo-Summer2012
-if [ $? != 0 ]; then
-    echo "FAILURE: -----------------------------------------------------------"
-    echo "Failed to find unpacked directory: lsst_dm_stack_demo-Summer2012"
-    echo "FAILURE: -----------------------------------------------------------"
-    exit $BUILDBOT_FAILURE
-fi
-
-
-# Setup the entire build environment for a demo run
-while read LINE; do
-    set $LINE
-    echo "Setting up: $1   $2"
-    setup -j $1 $2
-done < $MANIFEST
-
-
-echo ""
-echo " ----------------------------------------------------------------"
+#*************************************************************************
+echo "----------------------------------------------------------------"
+echo "EUPS-tag: $TAG     Version: $VERSION"
+echo "BUILDER_NAME: $BUILDER_NAME    BUILD_NUMBER: $BUILD_NUMBER"
+echo "Dataset size: $SIZE"
+echo "Current `umask -p`"
+echo "Setup lsst_distrib "
 eups list  -s
 echo "-----------------------------------------------------------------"
-echo ""
-echo "Current `umask -p`"
 
 if [ -z  "$PIPE_TASKS_DIR" -o -z "$OBS_SDSS_DIR" ]; then
-      echo "FAILURE: ----------------------------------------------------------"
-      echo "Failed to setup either PIPE_TASKS or OBS_SDSS; both of  which are required by lsst_dm_stack_demo-Summer2012."
-      echo "FAILURE: ----------------------------------------------------------"
+      print_error "*** Failed to setup either PIPE_TASKS or OBS_SDSS; both of  which are required by $DEMO_BASENAME"
       exit $BUILDBOT_FAILURE
 fi
 
-echo "./bin/demo.sh"
-./bin/demo.sh
-if [ $? != 0 ]; then
-    echo "FAILURE: -----------------------------------------------------------"
-    echo "Failed during execution of  lsst_dm_stack_demo-Summer2012"
-    echo "FAILURE: -----------------------------------------------------------"
+# Acquire and Load the demo package in buildbot work directory
+echo "curl -ko $DEMO_TGZ $DEMO_ROOT/$DEMO_TGZ"
+curl -ko $DEMO_TGZ $DEMO_ROOT/$DEMO_TGZ
+if [ ! -f $DEMO_TGZ ]; then
+    print_error "*** Failed to acquire demo from: $DEMO_ROOT/$DEMO_TGZ  ."
     exit $BUILDBOT_FAILURE
 fi
 
-
-echo "diff detected-sources.txt.expected detected-sources.txt"
-diff detected-sources.txt.expected detected-sources.txt
-if  [ $? ]; then
-    exit $BUILDBOT_SUCCESS
+echo "tar xzf $DEMO_TGZ"
+tar xzf $DEMO_TGZ
+if [ $? != 0 ]; then
+    print_error "*** Failed to unpack: $DEMO_TGZ"
+    exit $BUILDBOT_FAILURE
 fi
-exit  $BUILDBOT_WARNINGS
+
+DEMO_BASENAME=`basename $DEMO_TGZ | sed -e "s/\..*//"`
+echo "DEMO_BASENAME: $DEMO_BASENAME"
+cd $DEMO_BASENAME
+if [ $? != 0 ]; then
+    print_error "*** Failed to find unpacked directory: $DEMO_BASENAME"
+    exit $BUILDBOT_FAILURE
+fi
+
+./bin/demo.sh --$SIZE
+if [ $? != 0 ]; then
+    print_error "*** Failed during execution of  $DEMO_BASENAME"
+    exit $BUILDBOT_FAILURE
+fi
+
+# Add column position to each label for ease of reading the output comparison
+COLUMNS=`head -1 detected-sources$SIZE_EXT.txt| sed -e "s/^#//" `
+j=1
+NEWCOLUMNS=`for i in $COLUMNS; do echo -n "$j:$i "; j=$((j+1)); done`
+echo "Columns in benchmark datafile:"
+echo $NEWCOLUMNS
+echo "$BB_ANCESTRAL_HOME/numdiff/bin/numdiff -# 11 detected-sources$SIZE_EXT.txt.expected detected-sources$SIZE_EXT.txt"
+$BB_ANCESTRAL_HOME/numdiff/bin/numdiff -# 11 detected-sources$SIZE_EXT.txt.expected detected-sources$SIZE_EXT.txt
+if  [ $? != 0 ]; then
+    print_error "*** Warning: output results not within error tolerance for: $DEMO_BASENAME"
+    exit $BUILDBOT_WARNINGS
+exit  $BUILDBOT_SUCCESS
+fi
