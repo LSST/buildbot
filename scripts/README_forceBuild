@@ -5,7 +5,7 @@ forceBuild  supports on-git-change triggered builds on lsst-dev.
 
 
 The cron command currently used on lsst-dev as rallsman:
-*/10 * * * * /lsst/home/rallsman/bin/forceBuild-cron
+*/10 * * * * /lsst/home/lsstsw/bin/forceBuild-cron
 
 forceBuild-cron - determines if there has been a git change since the last 
         time the cron job was run.  If there was, it invokes forceBuild.py

@@ -92,7 +92,7 @@ RET=$?
 #=================================================================
 # Following is necessary to test failures until a test package is fabricated 
 # for this very purpose.
-#  Case 1: uncomment all lines in following block - email sent to lsst-data
+#  Case 1: uncomment all lines in following block - email sent to lsst-dm-dev
 #  Case 2: keep commented the lines with '***', and ':::::' -
 #          email sent only to Buildbot Nanny.
 # Remember to re-comment the entire following block when done testing.
@@ -100,13 +100,13 @@ RET=$?
 #echo "Now forcing failure in order to test Buildbot error email delivery"
 #echo "*** error building product meas_algorithms."
 #echo "*** exit code = 2"
-#echo "*** log is in /usr/local/home/lsstsw/build/meas_algorithms/_build.log"
+#echo "*** log is in /lsst/home/lsstsw/build/meas_algorithms/_build.log"
 #echo "ctrl_provenance: 8.0.0.0+3 ERROR forced"
 #echo ":::::  scons: *** [src/WarpedPsf.os] Error 1"
 #echo ":::::  scons: building terminated because of errors."
 #echo "*** This is a test of Buildbot error handling system."
 #echo "*** I G N O R E this missive."
-#echo "This is not en error line"
+#echo "This is not an error line"
 #echo "::::: This concludes testing of Buildbot error handling for SCONS failures"
 #echo "::::: You may resume your normal activities."
 #exit $BUILDBOT_FAILURE
