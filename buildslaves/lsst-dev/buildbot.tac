@@ -12,7 +12,7 @@ import BbConfig
 SlavePassword = BbConfig.getSecret()
 ##########################################################################
 
-basedir = r'/usr/local/home/lsstsw2/BBSlaves/lsst-dev'
+basedir = r'/lsst/home/lsstsw/BBSlaves/lsst-dev'
 rotateLength = 10000000
 maxRotatedFiles = 10
 
