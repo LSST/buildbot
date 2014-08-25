@@ -73,11 +73,8 @@ else
     exit $BUILDBOT_FAILURE
 fi
 
-# The displays provide feedback on the environment existing prior to lsst_build
+# The display provides feedback on the environment existing prior to lsst_build
 printenv
-echo "eups list lsst_distrib:"
-eups list lsst_distrib
-
 
 # Rebuild the stack if a git pkg changed. 
 cd $LSSTSW
@@ -111,6 +108,15 @@ RET=$?
 #echo "::::: You may resume your normal activities."
 #exit $BUILDBOT_FAILURE
 #=================================================================
+
+# Find current and last EUPS build tag.
+eval "$(grep -E '^BUILD=' "$LSSTSW"/build/manifest.txt | sed -e 's/BUILD/TAG/')"
+print_error "The DM stack has been installed at $LSSTSW with tag: $TAG."
+OLD_TAG=`cat $WORK_DIR/build/BB_Last_Tag`
+echo ":LastEupsTag:ThisEupsTag: --> :$OLD_TAG:$TAG:"
+
+BUILD_STATUS="success" && (( $RET != 0 )) && BUILD_STATUS="failure"
+echo "$TAG:$BUILD_NUMBER:$BUILD_STATUS:$BRANCH" >> $LSSTSW/build/eupsTag_buildbotNum
 
 if [ $RET -ne 0 ]; then
     # Archive the failed build artifacts
@@ -146,11 +152,6 @@ if [ $RET -ne 0 ]; then
     exit $BUILDBOT_FAILURE 
 fi  
 
-# Find current and last EUPS build tag.
-eval "$(grep -E '^BUILD=' "$LSSTSW"/build/manifest.txt | sed -e 's/BUILD/TAG/')"
-print_error "The DM stack has been installed at $LSSTSW with tag: $TAG."
-OLD_TAG=`cat $WORK_DIR/build/BB_Last_Tag`
-echo ":LastTag:ThisTag: --> :$OLD_TAG:$TAG:"
 #if [ "$OLD_TAG" \> "$TAG" ] || [ "$OLD_TAG" == "$TAG" ]; then
 #    echo "Since no git changes, no need to process further"
 #    exit $BUILDBOT_SUCCESS
