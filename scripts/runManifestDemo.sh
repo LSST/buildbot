@@ -35,6 +35,8 @@ print_error() {
 }
 #--------------------------------------------------------------------------
 
+# This setup required due to eups usage.
+source $EUPS_DIR/bin/setups.sh
 # Setup LSST buildbot support fnunctions
 source ${0%/*}/gitConstants.sh
 

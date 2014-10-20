@@ -1,6 +1,8 @@
 #! /bin/bash
 # Build cross linked doxygen documents and load into buildbot public_html website
 
+# This setup required due to eups usage.
+source $EUPS_DIR/bin/setups.sh
 source ${0%/*}/gitConstants.sh
 
 DEBUG=debug
