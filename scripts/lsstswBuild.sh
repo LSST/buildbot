@@ -112,8 +112,6 @@ RET=$?
 # Find current and last EUPS build tag.
 eval "$(grep -E '^BUILD=' "$LSSTSW"/build/manifest.txt | sed -e 's/BUILD/TAG/')"
 print_error "The DM stack has been installed at $LSSTSW with tag: $TAG."
-OLD_TAG=`cat $WORK_DIR/build/BB_Last_Tag`
-echo ":LastEupsTag:ThisEupsTag: --> :$OLD_TAG:$TAG:"
 
 BUILD_STATUS="success" && (( $RET != 0 )) && BUILD_STATUS="failure"
 echo "$TAG:$BUILD_NUMBER:$BUILD_STATUS:$BRANCH" >> $LSSTSW/build/eupsTag_buildbotNum
@@ -152,10 +150,6 @@ if [ $RET -ne 0 ]; then
     exit $BUILDBOT_FAILURE 
 fi  
 
-#if [ "$OLD_TAG" \> "$TAG" ] || [ "$OLD_TAG" == "$TAG" ]; then
-#    echo "Since no git changes, no need to process further"
-#    exit $BUILDBOT_SUCCESS
-#fi
 
 # Build doxygen documentation
 cd $LSSTSW/build
