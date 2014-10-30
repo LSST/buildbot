@@ -76,7 +76,8 @@ fi
 # The display provides feedback on the environment existing prior to lsst_build
 printenv
 
-if [ ! -w $LSSTSW/build/$FAILED_LOGS ]; then
+mkdir -p $LSSTSW/build/$FAILED_LOGS
+if [ $? -ne 0 ]; then
     print_error "Failed prior to stack rebuild; user unable to write to directory: $LSSTSW/build/$FAILED_LOGS"
     exit $BUILDBOT_FAILURE
 fi
@@ -152,7 +153,7 @@ else
         print_error "Failed during rebuild of DM stack." 
         echo "The following build artifacts are in directory: $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/"
         ls $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/*
-la  else
+    else
         print_error "Failed during setup prior to stack rebuild."
     fi
     exit $BUILDBOT_FAILURE 
