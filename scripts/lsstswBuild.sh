@@ -76,6 +76,12 @@ fi
 # The display provides feedback on the environment existing prior to lsst_build
 printenv
 
+mkdir -p $LSSTSW/build/$FAILED_LOGS
+if [ $? -ne 0 ]; then
+    print_error "Failed prior to stack rebuild; user unable to write to directory: $LSSTSW/build/$FAILED_LOGS"
+    exit $BUILDBOT_FAILURE
+fi
+
 # Rebuild the stack if a git pkg changed. 
 cd $LSSTSW
 if [ ! -f ./bin/rebuild ]; then
@@ -109,53 +115,48 @@ RET=$?
 #exit $BUILDBOT_FAILURE
 #=================================================================
 
-# Find current and last EUPS build tag.
+# Set current build tag (also used as eups tag per installed package).
 eval "$(grep -E '^BUILD=' "$LSSTSW"/build/manifest.txt | sed -e 's/BUILD/TAG/')"
-print_error "The DM stack has been installed at $LSSTSW with tag: $TAG."
-OLD_TAG=`cat $WORK_DIR/build/BB_Last_Tag`
-echo ":LastEupsTag:ThisEupsTag: --> :$OLD_TAG:$TAG:"
 
 BUILD_STATUS="success" && (( $RET != 0 )) && BUILD_STATUS="failure"
 echo "$TAG:$BUILD_NUMBER:$BUILD_STATUS:$BRANCH" >> $LSSTSW/build/eupsTag_buildbotNum
 
-if [ $RET -ne 0 ]; then
-    # Archive the failed build artifacts
-    print_error "Failed rebuild of DM stack." 
+if [ $RET -eq 0 ]; then
+    print_error "The DM stack has been installed at $LSSTSW with tag: $TAG."
+else
+    # Archive the failed build artifacts, if any found.
     mkdir -p $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER
-    for product in $LSSTSW/build/[a-z]*; do
-        PACKAGE=`echo $product | sed -e "s/^.*\/build\///"`
+    for product in $LSSTSW/build/[[:lower:]]*/ ; do
+        PACKAGE=`echo $product | sed -e "s/^.*\/build\///"  -e "s/\///"`
         PKG_FAIL_DIR=$LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/${PACKAGE}/
-        # Catch unit testing errors and scons (compile) errors
-        if [ -d $product ] ; then
-            # Are there failed tests?
-            if [ -d $product/tests/.tests/ ] && \
-               [ "`ls $product/tests/.tests/*.failed 2> /dev/null | wc -l`" != "0" ]  ; then
-               mkdir -p  $PKG_FAIL_DIR
-               for i in $product/tests/.tests/*.failed; do
-                   cp -p $i  $PKG_FAIL_DIR/.
-               done
-               for i in _build.log _build.tags _build.sh; do
-                   cp -p $product/$i $PKG_FAIL_DIR/.
-               done
-            # Are there error messages littered in the output?
-            elif [ -e $product/_build.log ] && \
-               [  ! `grep -qs '\*\*\* \|ERROR ' $product/_build.log` ]; then
-               mkdir -p $PKG_FAIL_DIR
-               for i in _build.log _build.tags _build.sh; do
-                   cp -p $product/$i $PKG_FAIL_DIR/.
-               done
-            fi
+        # Are there failed tests?
+        if [ -n "$(ls -A  $product/tests/.tests/*.failed 2> /dev/null)" ]; then
+            mkdir -p  $PKG_FAIL_DIR
+            for i in $product/tests/.tests/*.failed; do
+                cp -p $i  $PKG_FAIL_DIR/.
+            done
+            for i in _build.log _build.tags _build.sh; do
+                cp -p $product/$i $PKG_FAIL_DIR/.
+            done
+        # Are there error messages littered in the output?
+        elif [ -e $product/_build.log ] && \
+            [  ! `grep -qs '\*\*\* \|ERROR ' $product/_build.log` ]; then
+            mkdir -p $PKG_FAIL_DIR
+            for i in _build.log _build.tags _build.sh; do
+                cp -p $product/$i $PKG_FAIL_DIR/.
+            done
         fi
     done
-    echo "The following build artifacts are in directory: $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/"
-    ls $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/*
+    if [ "`ls -A $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER`" != "" ]; then
+        print_error "Failed during rebuild of DM stack." 
+        echo "The following build artifacts are in directory: $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/"
+        ls $LSSTSW/build/$FAILED_LOGS/$BUILD_NUMBER/*
+    else
+        print_error "Failed during setup prior to stack rebuild."
+    fi
     exit $BUILDBOT_FAILURE 
 fi  
 
-#if [ "$OLD_TAG" \> "$TAG" ] || [ "$OLD_TAG" == "$TAG" ]; then
-#    echo "Since no git changes, no need to process further"
-#    exit $BUILDBOT_SUCCESS
-#fi
 
 # Build doxygen documentation
 cd $LSSTSW/build
