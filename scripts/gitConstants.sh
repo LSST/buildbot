@@ -20,7 +20,7 @@ DEMO_TGZ="lsst_dm_stack_demo-master.tar.gz"
 
 BUILDBOT_SUCCESS=0
 BUILDBOT_FAILURE=1
-BUILDBOT_WARNINGS=2
+BUILDBOT_WARNING=2
 BB_ANCESTRAL_HOME="/lsst/home/buildbot"
 
 

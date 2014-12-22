@@ -139,6 +139,6 @@ echo "$BB_ANCESTRAL_HOME/numdiff/bin/numdiff -# 11 detected-sources$SIZE_EXT.txt
 $BB_ANCESTRAL_HOME/numdiff/bin/numdiff -# 11 detected-sources$SIZE_EXT.txt.expected detected-sources$SIZE_EXT.txt
 if  [ $? != 0 ]; then
     print_error "*** Warning: output results not within error tolerance for: $DEMO_BASENAME"
-    exit $BUILDBOT_WARNINGS
+    exit $BUILDBOT_WARNING
 exit  $BUILDBOT_SUCCESS
 fi
